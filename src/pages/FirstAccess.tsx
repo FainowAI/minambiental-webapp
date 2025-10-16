@@ -3,53 +3,45 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Eye, EyeOff, X } from 'lucide-react';
 
-interface LoginModalProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}
-
-const LoginModal = ({ open, onOpenChange }: LoginModalProps) => {
+const FirstAccess = () => {
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [rememberMe, setRememberMe] = useState(false);
+  const [confirmPassword, setConfirmPassword] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Implementar lógica de login aqui
-    console.log({ email, password, rememberMe });
-  };
-
-  const handleFirstAccess = () => {
-    onOpenChange(false);
-    navigate('/first-access');
+    // Implementar lógica de definição de senha aqui
+    if (password !== confirmPassword) {
+      alert('As senhas não coincidem!');
+      return;
+    }
+    console.log({ email, password });
+    // Redirecionar após definir senha
+    navigate('/');
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[440px] p-0 gap-0 bg-white border-[rgba(0,0,0,0.18)]">
-        {/* Header */}
-        <DialogHeader className="bg-[rgba(0,0,0,0.03)] border-b border-[rgba(0,0,0,0.18)] px-4 py-2">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+      <Card className="w-full max-w-md border-[rgba(0,0,0,0.18)] shadow-sm">
+        <CardHeader className="bg-[rgba(0,0,0,0.03)] border-b border-[rgba(0,0,0,0.18)] px-4 py-2">
           <div className="flex items-center justify-between">
-            <DialogTitle className="text-base font-normal text-[#212529]">
-              Realizar Login
-            </DialogTitle>
+            <h1 className="text-base font-normal text-[#212529]">Definir Senha</h1>
             <button
-              onClick={() => onOpenChange(false)}
+              onClick={() => navigate('/')}
               className="text-gray-400 hover:text-gray-600 transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
-        </DialogHeader>
+        </CardHeader>
 
-        {/* Content */}
-        <div className="px-0 py-5">
+        <CardContent className="px-0 py-5">
           <div className="flex flex-col items-center gap-8 px-10">
             {/* Header */}
             <div className="flex flex-col items-center gap-6 w-full">
@@ -79,7 +71,7 @@ const LoginModal = ({ open, onOpenChange }: LoginModalProps) => {
                   <span className="text-[#aa7850]">l</span>
                 </h2>
                 <p className="text-base text-[#6c757d] text-center leading-[1.5]">
-                  Bem-vindo de volta! Por favor, insira seus dados
+                  Bem-vindo de volta! Por favor, insira sua senha.
                 </p>
               </div>
             </div>
@@ -98,6 +90,7 @@ const LoginModal = ({ open, onOpenChange }: LoginModalProps) => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="border-[#ced4da] text-base placeholder:text-[#6c757d] h-auto py-[7px] px-[13px]"
+                  required
                 />
               </div>
 
@@ -114,6 +107,7 @@ const LoginModal = ({ open, onOpenChange }: LoginModalProps) => {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="border-[#ced4da] text-base placeholder:text-[#6c757d] h-auto py-[7px] px-[13px] pr-10"
+                    required
                   />
                   <button
                     type="button"
@@ -129,62 +123,54 @@ const LoginModal = ({ open, onOpenChange }: LoginModalProps) => {
                 </div>
               </div>
 
-              {/* Lembrar Login e Esqueceu a senha */}
-              <div className="flex items-center justify-between pb-2">
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="remember"
-                    checked={rememberMe}
-                    onCheckedChange={(checked) => setRememberMe(checked as boolean)}
-                    className="border-[#dee2e6] data-[state=checked]:bg-[#029c58] data-[state=checked]:border-[#029c58]"
+              {/* Confirme a senha */}
+              <div className="flex flex-col gap-2 pb-4">
+                <Label htmlFor="confirmPassword" className="text-base text-[#212529] font-normal">
+                  Confirme a senha
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="confirmPassword"
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    placeholder="Informe novamente senha"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="border-[#ced4da] text-base placeholder:text-[#6c757d] h-auto py-[7px] px-[13px] pr-10"
+                    required
                   />
-                  <Label
-                    htmlFor="remember"
-                    className="text-base text-[#212529] font-normal cursor-pointer"
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                   >
-                    Lembrar Login
-                  </Label>
+                    {showConfirmPassword ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
+                  </button>
                 </div>
-                <a
-                  href="#"
-                  className="text-base text-[#16b2e8] underline hover:text-[#1296cc] transition-colors"
-                >
-                  Esqueceu a senha?
-                </a>
               </div>
 
-              {/* Botão Entrar */}
-              <div className="flex flex-col gap-4 pt-2">
+              {/* Botão Definir */}
+              <div className="flex flex-col gap-4">
                 <Button
                   type="submit"
                   className="w-full bg-[#029c58] hover:bg-[#028a4d] border border-[#029c58] text-white text-base font-normal py-[7px] px-[13px] h-auto rounded-md"
                 >
-                  Entrar
+                  Definir
                 </Button>
               </div>
             </form>
-
-            {/* Primeiro Acesso */}
-            <div className="flex items-center justify-center gap-1">
-              <span className="text-base text-[#6c757d]">Primeiro Acesso?</span>
-              <button
-                type="button"
-                onClick={handleFirstAccess}
-                className="text-base text-[#16b2e8] underline hover:text-[#1296cc] transition-colors"
-              >
-                Sim
-              </button>
-            </div>
           </div>
-        </div>
+        </CardContent>
 
-        {/* Footer */}
-        <div className="bg-[rgba(0,0,0,0.03)] border-t border-[rgba(0,0,0,0.18)] px-4 py-2">
+        <CardFooter className="bg-[rgba(0,0,0,0.03)] border-t border-[rgba(0,0,0,0.18)] px-4 py-2">
           <p className="text-base text-[#212529]">&nbsp;</p>
-        </div>
-      </DialogContent>
-    </Dialog>
+        </CardFooter>
+      </Card>
+    </div>
   );
 };
 
-export default LoginModal;
+export default FirstAccess;
