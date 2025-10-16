@@ -1,0 +1,77 @@
+import React, { useState } from 'react';
+import LoginModal from './LoginModal';
+
+const LoginHero = () => {
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+
+  return (
+    <>
+      <LoginModal open={isLoginModalOpen} onOpenChange={setIsLoginModalOpen} />
+      <main className="w-full max-w-[1670px] ml-[70px] mt-[110px] max-md:max-w-full max-md:mt-10 max-md:ml-4">
+      <div className="gap-5 flex max-md:flex-col max-md:items-stretch">
+        <div className="w-[46%] max-md:w-full max-md:ml-0">
+          <img
+            src="https://api.builder.io/api/v1/image/assets/TEMP/67230a190448214b3b7b1d351c5a6186fae42fdb?placeholderIfAbsent=true"
+            alt="Environmental illustration"
+            className="aspect-[1] object-contain w-full max-md:max-w-full max-md:mt-10"
+          />
+        </div>
+        <section className="w-[54%] ml-5 max-md:w-full max-md:ml-0">
+          <div className="flex w-full flex-col self-stretch items-center text-base font-normal my-auto max-md:max-w-full max-md:mt-10">
+            <header className="justify-center items-stretch flex flex-col overflow-hidden text-xl text-[#212529] leading-[1.2] bg-[rgba(255,255,255,0.00)]">
+              <h1>
+                Bem-vindo a{' '}
+                <span style={{ color: 'rgba(165,214,37,1)' }}>M</span>
+                <span style={{ color: 'rgba(22,178,232,1)' }}>i</span>
+                <span style={{ color: 'rgba(97,56,29,1)' }}>n</span>
+                <span style={{ color: 'rgba(2,156,88,1)' }}>A</span>
+                <span style={{ color: 'rgba(170,120,80,1)' }}>m</span>
+                b
+                <span style={{ color: 'rgba(202,178,159,1)' }}>i</span>
+                <span style={{ color: 'rgba(165,214,37,1)' }}>e</span>
+                <span style={{ color: 'rgba(22,178,232,1)' }}>n</span>
+                <span style={{ color: 'rgba(97,56,29,1)' }}>t</span>
+                <span style={{ color: 'rgba(2,156,88,1)' }}>a</span>
+                <span style={{ color: 'rgba(170,120,80,1)' }}>l</span>
+                !
+              </h1>
+            </header>
+            <div className="justify-center items-stretch self-stretch flex w-full flex-col overflow-hidden text-[#212529] text-justify leading-6 bg-[rgba(255,255,255,0.00)] mt-10 max-md:max-w-full">
+              <p className="text-[#212529] max-md:max-w-full">
+                Lorem ipsum dolor sit amet, consectetur adipiscing elit. Proin
+                ac volutpat lacus. Morbi ultricies iaculis ullamcorper. Aenean
+                sit amet commodo leo. Nunc in tellus quis mauris tempus
+                commodo in vitae tellus. Phasellus nec ipsum scelerisque,
+                placerat augue sed, lacinia ipsum. Pellentesque ut blandit
+                nisi. Mauris volutpat purus lectus, ut venenatis felis blandit
+                vitae. Vestibulum at finibus nibh. Nam diam erat, interdum vel
+                lacus id, congue elementum lorem. Aenean ut nisl eget augue
+                vestibulum dictum.
+                <br />
+                <br />
+                Donec cursus tempus tellus, sit amet iaculis quam viverra non.
+                Vivamus ornare lacinia eleifend. Vestibulum in venenatis nibh,
+                vel lobortis dolor. Integer interdum ac urna mollis dignissim.
+                Aliquam sit amet sem a augue ultrices volutpat a sed metus.
+                Duis ornare leo vitae quam aliquet tempus. In at sapien purus.
+              </p>
+            </div>
+            <button
+              onClick={() => setIsLoginModalOpen(true)}
+              className="bg-[rgba(2,156,88,1)] border flex items-center gap-2 overflow-hidden text-white justify-center mt-10 px-3 py-1.5 rounded-md border-[rgba(2,156,88,1)] border-solid hover:bg-[rgba(2,156,88,0.9)] transition-colors"
+            >
+              <div className="justify-center items-stretch self-stretch flex flex-col overflow-hidden bg-[rgba(255,255,255,0.00)] my-auto">
+                <div className="text-white">
+                  Realizar Login
+                </div>
+              </div>
+            </button>
+          </div>
+        </section>
+      </div>
+    </main>
+    </>
+  );
+};
+
+export default LoginHero;
