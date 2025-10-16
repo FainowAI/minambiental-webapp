@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import React, { useState } from 'react';
 import LoginModal from './LoginModal';
 
@@ -7,6 +8,12 @@ const Navbar = () => {
   return (
     <>
       <LoginModal open={isLoginModalOpen} onOpenChange={setIsLoginModalOpen} />
+=======
+import React from 'react';
+
+const Navbar = () => {
+  return (
+>>>>>>> 83440827721beb604b967e1897bcf63e36545c95
     <header className="items-center flex min-h-[73px] w-full font-normal flex-wrap bg-[#F8F9FA] px-3 py-[17px] max-md:max-w-full">
       <img
         src="https://api.builder.io/api/v1/image/assets/TEMP/74e3aee1c78f811a10ead1a1b0917e5c41cff3b1?placeholderIfAbsent=true"
@@ -23,10 +30,14 @@ const Navbar = () => {
       <nav className="items-center self-stretch flex min-w-60 text-base text-[#029C58] flex-1 shrink basis-8 bg-[rgba(255,255,255,0.00)] my-auto max-md:max-w-full">
         <div className="self-stretch flex min-w-60 w-72 items-center gap-2 my-auto">
           <div className="items-center content-center flex-wrap self-stretch flex min-w-60 gap-2 bg-[rgba(255,255,255,0.00)] my-auto">
+<<<<<<< HEAD
             <button
               onClick={() => setIsLoginModalOpen(true)}
               className="justify-center items-center border self-stretch flex gap-2 overflow-hidden bg-[rgba(255,255,255,0.00)] my-auto px-3 py-1.5 rounded-md border-solid border-[#029C58] hover:bg-[#029C58] hover:text-white transition-colors"
             >
+=======
+            <button className="justify-center items-center border self-stretch flex gap-2 overflow-hidden bg-[rgba(255,255,255,0.00)] my-auto px-3 py-1.5 rounded-md border-solid border-[#029C58] hover:bg-[#029C58] hover:text-white transition-colors">
+>>>>>>> 83440827721beb604b967e1897bcf63e36545c95
               <div className="justify-center items-stretch self-stretch flex flex-col overflow-hidden bg-[rgba(255,255,255,0.00)] my-auto">
                 <div>Realizar Login</div>
               </div>
@@ -40,7 +51,10 @@ const Navbar = () => {
         </div>
       </nav>
     </header>
+<<<<<<< HEAD
     </>
+=======
+>>>>>>> 83440827721beb604b967e1897bcf63e36545c95
   );
 };
 
