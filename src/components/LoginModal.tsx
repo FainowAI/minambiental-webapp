@@ -5,7 +5,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Eye, EyeOff, X } from 'lucide-react';
+import { Eye, EyeOff, X, Loader2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface LoginModalProps {
   open: boolean;
@@ -18,11 +20,51 @@ const LoginModal = ({ open, onOpenChange }: LoginModalProps) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Implementar lógica de login aqui
-    console.log({ email, password, rememberMe });
+    setLoading(true);
+
+    try {
+      // Validação básica
+      if (!email || !password) {
+        toast.error('Por favor, preencha todos os campos');
+        setLoading(false);
+        return;
+      }
+
+      // Chamada ao Supabase Auth
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password: password,
+      });
+
+      if (error) {
+        // Tratamento de erros específicos do Supabase
+        if (error.message.includes('Invalid login credentials')) {
+          toast.error('Email ou senha incorretos');
+        } else if (error.message.includes('Email not confirmed')) {
+          toast.error('Por favor, confirme seu email antes de fazer login');
+        } else {
+          toast.error('Erro ao fazer login. Tente novamente.');
+        }
+        setLoading(false);
+        return;
+      }
+
+      // Login bem-sucedido
+      if (data.user) {
+        toast.success('Login realizado com sucesso!');
+        onOpenChange(false);
+        navigate('/dashboard');
+      }
+    } catch (err) {
+      console.error('Erro inesperado:', err);
+      toast.error('Erro inesperado. Tente novamente.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleFirstAccess = () => {
@@ -163,9 +205,17 @@ const LoginModal = ({ open, onOpenChange }: LoginModalProps) => {
               <div className="flex flex-col gap-4 pt-2">
                 <Button
                   type="submit"
-                  className="w-full bg-[#029c58] hover:bg-[#028a4d] border border-[#029c58] text-white text-base font-normal py-[7px] px-[13px] h-auto rounded-md"
+                  disabled={loading}
+                  className="w-full bg-[#029c58] hover:bg-[#028a4d] border border-[#029c58] text-white text-base font-normal py-[7px] px-[13px] h-auto rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Entrar
+                  {loading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Entrando...
+                    </>
+                  ) : (
+                    'Entrar'
+                  )}
                 </Button>
               </div>
             </form>
