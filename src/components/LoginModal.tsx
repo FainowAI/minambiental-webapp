@@ -72,6 +72,11 @@ const LoginModal = ({ open, onOpenChange }: LoginModalProps) => {
     navigate('/first-access');
   };
 
+  const handleForgotPassword = () => {
+    onOpenChange(false);
+    navigate('/forgot-password');
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[440px] p-0 gap-0 bg-white border-[rgba(0,0,0,0.18)]">
@@ -187,12 +192,13 @@ const LoginModal = ({ open, onOpenChange }: LoginModalProps) => {
                     Lembrar Login
                   </Label>
                 </div>
-                <a
-                  href="#"
+                <button
+                  type="button"
+                  onClick={handleForgotPassword}
                   className="text-base text-[#16b2e8] underline hover:text-[#1296cc] transition-colors"
                 >
                   Esqueceu a senha?
-                </a>
+                </button>
               </div>
 
               {/* Botão Entrar */}
