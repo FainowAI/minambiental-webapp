@@ -510,6 +510,7 @@ export type Database = {
           cpf: string
           created_at: string | null
           id: string
+          invitation_id: string | null
           nome: string
           updated_at: string | null
         }
@@ -518,6 +519,7 @@ export type Database = {
           cpf: string
           created_at?: string | null
           id: string
+          invitation_id?: string | null
           nome: string
           updated_at?: string | null
         }
@@ -526,7 +528,64 @@ export type Database = {
           cpf?: string
           created_at?: string | null
           id?: string
+          invitation_id?: string | null
           nome?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_invitation_id_fkey"
+            columns: ["invitation_id"]
+            isOneToOne: false
+            referencedRelation: "user_invitations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_invitations: {
+        Row: {
+          accepted_at: string | null
+          celular: string | null
+          cpf: string
+          created_at: string | null
+          email: string
+          expires_at: string
+          id: string
+          invited_by: string | null
+          nome: string
+          perfil: Database["public"]["Enums"]["user_profile"]
+          status: Database["public"]["Enums"]["invitation_status"]
+          token: string
+          updated_at: string | null
+        }
+        Insert: {
+          accepted_at?: string | null
+          celular?: string | null
+          cpf: string
+          created_at?: string | null
+          email: string
+          expires_at: string
+          id?: string
+          invited_by?: string | null
+          nome: string
+          perfil: Database["public"]["Enums"]["user_profile"]
+          status?: Database["public"]["Enums"]["invitation_status"]
+          token: string
+          updated_at?: string | null
+        }
+        Update: {
+          accepted_at?: string | null
+          celular?: string | null
+          cpf?: string
+          created_at?: string | null
+          email?: string
+          expires_at?: string
+          id?: string
+          invited_by?: string | null
+          nome?: string
+          perfil?: Database["public"]["Enums"]["user_profile"]
+          status?: Database["public"]["Enums"]["invitation_status"]
+          token?: string
           updated_at?: string | null
         }
         Relationships: []
@@ -612,6 +671,22 @@ export type Database = {
       }
     }
     Functions: {
+      accept_invitation: {
+        Args: { invitation_token: string; user_id: string }
+        Returns: Json
+      }
+      expire_old_invitations: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      generate_invitation_token: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
+      get_invitation_by_token: {
+        Args: { token: string }
+        Returns: Json
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -622,6 +697,8 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "user" | "gestor"
+      invitation_status: "pending" | "accepted" | "expired"
+      user_profile: "corpo_tecnico" | "tecnico" | "requerente"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -750,6 +827,8 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "user", "gestor"],
+      invitation_status: ["pending", "accepted", "expired"],
+      user_profile: ["corpo_tecnico", "tecnico", "requerente"],
     },
   },
 } as const
