@@ -1,9 +1,11 @@
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { useNavigate } from 'react-router-dom';
 
 const Home = () => {
+  const navigate = useNavigate();
   return (
-    <div className="bg-white min-h-screen">
+    <div className="bg-white min-h-screen flex flex-col">
       {/* Navbar */}
       <nav className="bg-[#f8f9fa] flex items-center px-3 py-2 h-[73px]">
         <img
@@ -20,7 +22,7 @@ const Home = () => {
           <div className="flex items-center">
             <div className="px-4 py-2">
               <span className="text-[16px] text-[rgba(0,0,0,0.9)] font-['Roboto'] leading-[1.5]">
-                Item One
+                Home
               </span>
             </div>
             <div className="px-4 py-2">
@@ -31,11 +33,6 @@ const Home = () => {
             <div className="px-4 py-2">
               <span className="text-[16px] text-[rgba(0,0,0,0.55)] font-['Roboto'] leading-[1.5]">
                 Usuário
-              </span>
-            </div>
-            <div className="px-4 py-2">
-              <span className="text-[16px] text-[rgba(0,0,0,0.55)] font-['Roboto'] leading-[1.5]">
-                Dashboard
               </span>
             </div>
           </div>
@@ -52,7 +49,7 @@ const Home = () => {
       </nav>
 
       {/* Content */}
-      <div className="px-[70px] py-[50px]">
+      <div className="flex-1 px-[70px] py-[50px]">
         {/* Title */}
         <h1 className="text-[20px] text-[#212529] font-['Roboto'] font-normal leading-[1.2] mb-6">
           Bem-vindo a <span className="text-[#a5d625]">M</span>
@@ -75,9 +72,9 @@ const Home = () => {
         </p>
 
         {/* Cards */}
-        <div className="flex gap-[120px] flex-wrap">
+        <div className="flex gap-[30px] justify-start flex-wrap">
           {/* Card 1 - Licenças e Contratos */}
-          <Card className="w-[500px] border-[rgba(0,0,0,0.18)]">
+          <Card className="w-[500px] border border-[rgba(0,0,0,0.18)] rounded-md">
             <CardHeader className="bg-[rgba(0,0,0,0.03)] border-b border-[rgba(0,0,0,0.18)] px-4 py-2">
               <div className="flex items-center gap-2 px-1">
                 <img
@@ -104,7 +101,7 @@ const Home = () => {
           </Card>
 
           {/* Card 2 - Usuário */}
-          <Card className="w-[500px] border-[rgba(0,0,0,0.18)]">
+          <Card className="w-[500px] border border-[rgba(0,0,0,0.18)] rounded-md">
             <CardHeader className="bg-[rgba(0,0,0,0.03)] border-b border-[rgba(0,0,0,0.18)] px-4 py-2">
               <div className="flex items-center gap-2 px-1">
                 <img
@@ -121,7 +118,10 @@ const Home = () => {
               <p className="text-[16px] text-[#212529] font-['Roboto'] leading-[1.5] mb-4">
                 Donec cursus tempus tellus, sit amet iaculis quam viverra non. Vivamus ornare lacinia eleifend. Vestibulum in venenatis nibh, vel lobortis dolor. Integer interdum ac urna mollis dignissim.
               </p>
-              <Button className="bg-[#029c58] hover:bg-[#028a4d] border border-[#aa7850] text-white text-[16px] font-['Roboto'] py-[7px] px-[13px] h-auto rounded-md">
+              <Button
+                onClick={() => navigate('/users')}
+                className="bg-[#029c58] hover:bg-[#028a4d] border border-[#aa7850] text-white text-[16px] font-['Roboto'] py-[7px] px-[13px] h-auto rounded-md"
+              >
                 Ir
               </Button>
             </CardContent>
@@ -131,7 +131,7 @@ const Home = () => {
           </Card>
 
           {/* Card 3 - Dashboard */}
-          <Card className="w-[500px] border-[rgba(0,0,0,0.18)]">
+          <Card className="w-[500px] border border-[rgba(0,0,0,0.18)] rounded-md">
             <CardHeader className="bg-[rgba(0,0,0,0.03)] border-b border-[rgba(0,0,0,0.18)] px-4 py-2">
               <div className="flex items-center gap-2 px-1">
                 <img
@@ -160,9 +160,9 @@ const Home = () => {
       </div>
 
       {/* Footer */}
-      <div className="bg-[rgba(0,0,0,0.03)] border-t border-[rgba(0,0,0,0.18)] px-4 py-2 mt-auto">
-        <p className="text-[16px] text-[#212529]">&nbsp;</p>
-      </div>
+      <footer className="bg-[rgba(0,0,0,0.03)] border-t border-[rgba(0,0,0,0.18)] px-4 py-2 mt-auto">
+        <p className="text-[16px] text-[#212529] font-['Roboto'] leading-[1.5]">&nbsp;</p>
+      </footer>
     </div>
   );
 };
