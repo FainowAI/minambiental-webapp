@@ -9,6 +9,7 @@ import ForgotPassword from "./pages/ForgotPassword";
 import PasswordResetConfirmation from "./pages/PasswordResetConfirmation";
 import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Dashboard";
+import Home from "./pages/Home";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -25,6 +26,7 @@ const App = () => (
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/password-reset-confirmation" element={<PasswordResetConfirmation />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/home" element={<Home />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

@@ -57,7 +57,7 @@ const LoginModal = ({ open, onOpenChange }: LoginModalProps) => {
       if (data.user) {
         toast.success('Login realizado com sucesso!');
         onOpenChange(false);
-        navigate('/dashboard');
+        navigate('/home');
       }
     } catch (err) {
       console.error('Erro inesperado:', err);
