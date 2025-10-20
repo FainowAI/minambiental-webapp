@@ -22,3 +22,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Email templates
+email.html
+forgotPass.html
+
+# Claude AI
+.claude

@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
-import { X, Loader2 } from 'lucide-react';
+import { Loader2, Leaf, ArrowLeft, Mail } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 
@@ -45,98 +45,182 @@ const ForgotPassword = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-      <Card className="w-full max-w-md border-[rgba(0,0,0,0.18)] shadow-sm">
-        <CardHeader className="bg-[rgba(0,0,0,0.03)] border-b border-[rgba(0,0,0,0.18)] px-4 py-2">
-          <div className="flex items-center justify-between">
-            <h1 className="text-base font-normal text-[#212529]">Alterar Senha</h1>
-            <button
-              onClick={() => navigate('/')}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </CardHeader>
+    <div className="min-h-screen flex flex-col lg:flex-row overflow-hidden">
+      {/* Left Side - Animated Background */}
+      <motion.div
+        initial={{ opacity: 0, x: -50 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.8 }}
+        className="hidden lg:flex lg:w-1/2 relative bg-gradient-to-br from-emerald-500 via-teal-600 to-green-700 items-center justify-center p-12"
+      >
+        {/* Animated Background Circles */}
+        <motion.div
+          animate={{
+            scale: [1, 1.2, 1],
+            rotate: [0, 90, 0],
+          }}
+          transition={{
+            duration: 20,
+            repeat: Infinity,
+            ease: "linear"
+          }}
+          className="absolute top-20 left-20 w-64 h-64 bg-white/10 rounded-full blur-3xl"
+        />
+        <motion.div
+          animate={{
+            scale: [1.2, 1, 1.2],
+            rotate: [90, 0, 90],
+          }}
+          transition={{
+            duration: 15,
+            repeat: Infinity,
+            ease: "linear"
+          }}
+          className="absolute bottom-20 right-20 w-96 h-96 bg-white/10 rounded-full blur-3xl"
+        />
 
-        <CardContent className="px-0 py-5">
-          <div className="flex flex-col items-center gap-8 px-10">
-            {/* Header */}
-            <div className="flex flex-col items-center gap-6 w-full">
-              {/* Logo */}
-              <div className="w-12 h-12 rounded-full overflow-hidden">
-                <img
-                  src="http://localhost:3845/assets/17cd82d0b53defa48d0db5a8b3c90b892efc24fe.png"
-                  alt="MinAmbiental Logo"
-                  className="w-full h-full object-cover"
-                />
-              </div>
+        {/* Content */}
+        <div className="relative z-10 text-center text-white max-w-md">
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ delay: 0.3, type: "spring", stiffness: 200 }}
+            className="mb-8 inline-block p-4 bg-white/20 backdrop-blur-sm rounded-full"
+          >
+            <Mail className="w-16 h-16" />
+          </motion.div>
 
-              {/* Título e Subtítulo */}
-              <div className="flex flex-col items-center gap-3 w-full">
-                <h2 className="text-[32px] leading-[1.2] font-normal">
-                  <span className="text-[#a5d625]">M</span>
-                  <span className="text-[#16b2e8]">i</span>
-                  <span className="text-[#61381d]">n</span>
-                  <span className="text-[#029c58]">A</span>
-                  <span className="text-[#aa7850]">m</span>
-                  <span className="text-[#212529]">b</span>
-                  <span className="text-[#cab29f]">i</span>
-                  <span className="text-[#a5d625]">e</span>
-                  <span className="text-[#16b2e8]">n</span>
-                  <span className="text-[#61381d]">t</span>
-                  <span className="text-[#029c58]">a</span>
-                  <span className="text-[#aa7850]">l</span>
-                </h2>
-                <p className="text-base text-[#6c757d] text-center leading-[1.5]">
-                  Para alterar sua senha, informe o e-mail vinculado ao seu perfil.
-                </p>
+          <motion.h1
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+            className="text-5xl font-bold mb-6"
+          >
+            Recuperar Senha
+          </motion.h1>
+
+          <motion.p
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.7 }}
+            className="text-xl text-white/90 leading-relaxed"
+          >
+            Não se preocupe! Enviaremos um link de recuperação para seu email
+          </motion.p>
+        </div>
+      </motion.div>
+
+      {/* Right Side - Form */}
+      <motion.div
+        initial={{ opacity: 0, x: 50 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.8 }}
+        className="flex-1 flex items-center justify-center p-8 bg-white"
+      >
+        <div className="w-full max-w-md">
+          {/* Mobile Logo */}
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="lg:hidden text-center mb-8"
+          >
+            <div className="inline-block p-3 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-full mb-4">
+              <Leaf className="w-10 h-10 text-white" />
+            </div>
+            <h1 className="text-3xl font-bold text-gray-800">MinAmbiental</h1>
+            <p className="text-gray-600 mt-2">Recuperação de senha</p>
+          </motion.div>
+
+          {/* Back Button */}
+          <motion.button
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.3 }}
+            onClick={() => navigate('/')}
+            className="flex items-center gap-2 text-gray-600 hover:text-gray-800 mb-8 transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5" />
+            Voltar para login
+          </motion.button>
+
+          {/* Form Card */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100"
+          >
+            <div className="mb-8 text-center">
+              <div className="inline-block p-3 bg-emerald-100 rounded-full mb-4">
+                <Mail className="w-8 h-8 text-emerald-600" />
               </div>
+              <h2 className="text-2xl font-bold text-gray-800 mb-2">Esqueceu sua senha?</h2>
+              <p className="text-gray-600">
+                Informe seu email e enviaremos um link para redefinir sua senha
+              </p>
             </div>
 
-            {/* Formulário */}
-            <form onSubmit={handleSubmit} className="flex flex-col gap-2 w-full">
+            <form onSubmit={handleSubmit} className="space-y-5">
               {/* Email */}
-              <div className="flex flex-col gap-2 pb-4">
-                <Label htmlFor="email" className="text-base text-[#212529] font-normal">
+              <div className="space-y-2">
+                <Label htmlFor="email" className="text-sm font-medium text-gray-700">
                   Email
                 </Label>
                 <Input
                   id="email"
                   type="email"
-                  placeholder="Informe seu email"
+                  placeholder="seu@email.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="border-[#ced4da] text-base placeholder:text-[#6c757d] h-auto py-[7px] px-[13px]"
+                  className="h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500"
                   required
                 />
               </div>
 
-              {/* Botão Enviar */}
-              <div className="flex flex-col gap-4">
-                <Button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full bg-[#029c58] hover:bg-[#028a4d] border border-[#029c58] text-white text-base font-normal py-[7px] px-[13px] h-auto rounded-md disabled:opacity-50"
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Enviando...
-                    </>
-                  ) : (
-                    'Enviar'
-                  )}
-                </Button>
-              </div>
+              {/* Submit Button */}
+              <Button
+                type="submit"
+                disabled={loading}
+                className="w-full h-11 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transition-all duration-200"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                    Enviando...
+                  </>
+                ) : (
+                  'Enviar Link de Recuperação'
+                )}
+              </Button>
             </form>
-          </div>
-        </CardContent>
 
-        <CardFooter className="bg-[rgba(0,0,0,0.03)] border-t border-[rgba(0,0,0,0.18)] px-4 py-2">
-          <p className="text-base text-[#212529]">&nbsp;</p>
-        </CardFooter>
-      </Card>
+            {/* Help Text */}
+            <div className="mt-6 text-center">
+              <p className="text-sm text-gray-600">
+                Lembrou sua senha?{' '}
+                <button
+                  type="button"
+                  onClick={() => navigate('/')}
+                  className="text-emerald-600 hover:text-emerald-700 font-medium transition-colors"
+                >
+                  Fazer login
+                </button>
+              </p>
+            </div>
+          </motion.div>
+
+          {/* Footer */}
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.8 }}
+            className="text-center text-sm text-gray-500 mt-8"
+          >
+            © 2024 MinAmbiental. Todos os direitos reservados.
+          </motion.p>
+        </div>
+      </motion.div>
     </div>
   );
 };
