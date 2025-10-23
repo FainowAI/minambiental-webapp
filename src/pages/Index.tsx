@@ -8,6 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Eye, EyeOff, Loader2, Leaf } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { getUserApprovalStatus } from '@/services/userService';
 
 const Index = () => {
   const navigate = useNavigate();
@@ -46,8 +47,24 @@ const Index = () => {
       }
 
       if (data.user) {
-        toast.success('Login realizado com sucesso!');
-        navigate('/home');
+        // Check user approval status
+        try {
+          const approvalStatus = await getUserApprovalStatus(data.user.id);
+          
+          if (data.user.email && approvalStatus.isCorpoTecnico && !approvalStatus.isApproved) {
+            await supabase.auth.signOut();
+            toast.error('Seu cadastro está aguardando aprovação de um administrador');
+            return;
+          }
+          
+          toast.success('Login realizado com sucesso!');
+          navigate('/home');
+        } catch (error) {
+          console.error('Error checking approval status:', error);
+          // If error checking approval, allow login but show warning
+          toast.success('Login realizado com sucesso!');
+          navigate('/home');
+        }
       }
     } catch (err) {
       console.error('Erro inesperado:', err);

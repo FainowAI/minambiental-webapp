@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { toast } from 'sonner';
+import { z } from 'zod';
+import { createUserWithInvite } from '@/services/userService';
 import {
   Home as HomeIcon,
   FileText,
@@ -10,6 +13,7 @@ import {
   X,
   Save,
   ArrowLeft,
+  Loader2,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -58,12 +62,19 @@ import {
 
 // Type for form data
 interface UserFormData {
-  profile: string;
   name: string;
   cpf: string;
   email: string;
   phone: string;
 }
+
+// Validation schema
+const userSchema = z.object({
+  name: z.string().min(3, 'Nome deve ter pelo menos 3 caracteres').max(255),
+  cpf: z.string().regex(/^\d{3}\.\d{3}\.\d{3}-\d{2}$|^\d{11}$/, 'CPF inválido'),
+  email: z.string().email('Email inválido'),
+  phone: z.string().regex(/^\(\d{2}\)\s?\d{4,5}-?\d{4}$|^\d{10,11}$/, 'Celular inválido').optional(),
+});
 
 const CreateUser = () => {
   const navigate = useNavigate();
@@ -71,12 +82,13 @@ const CreateUser = () => {
 
   // Form state management
   const [formData, setFormData] = useState<UserFormData>({
-    profile: '',
     name: '',
     cpf: '',
     email: '',
     phone: '',
   });
+  const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Navigation items for the sidebar
   const navItems = [
@@ -110,14 +122,48 @@ const CreateUser = () => {
     navigate('/users');
   };
 
-  const handleSave = () => {
-    // Validation logic will be implemented here
-    console.log('Salvando usuário...', formData);
+  const handleSave = async () => {
+    setErrors({});
+    setLoading(true);
+
+    try {
+      const validatedData = userSchema.parse(formData);
+
+      await createUserWithInvite({
+        nome: validatedData.name,
+        cpf: validatedData.cpf.replace(/\D/g, ''),
+        email: validatedData.email,
+        celular: validatedData.phone?.replace(/\D/g, ''),
+      });
+
+      toast.success('Usuário criado com sucesso! Link de convite foi gerado.');
+      navigate('/users');
+
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const fieldErrors: Record<string, string> = {};
+        error.errors.forEach((err) => {
+          if (err.path[0]) {
+            fieldErrors[err.path[0] as string] = err.message;
+          }
+        });
+        setErrors(fieldErrors);
+
+        toast.error('Por favor, corrija os campos destacados.');
+      } else {
+        toast.error(error instanceof Error ? error.message : 'Erro inesperado.');
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Update form data
   const updateFormField = (field: keyof UserFormData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+    if (errors[field]) {
+      setErrors(prev => ({ ...prev, [field]: '' }));
+    }
   };
 
   return (
@@ -347,32 +393,10 @@ const CreateUser = () => {
 
                   {/* Form Fields */}
                   <div className="space-y-6">
-                    {/* Perfil Select */}
-                    <div className="space-y-2">
-                      <Label
-                        htmlFor="profile"
-                        className="text-sm font-medium text-gray-700"
-                      >
-                        Perfil <span className="text-red-500">*</span>
-                      </Label>
-                      <Select
-                        value={formData.profile}
-                        onValueChange={(value) => updateFormField('profile', value)}
-                      >
-                        <SelectTrigger
-                          id="profile"
-                          className="h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500"
-                        >
-                          <SelectValue placeholder="Selecione o perfil do usuário" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="corpo-tecnico">Corpo Técnico</SelectItem>
-                          <SelectItem value="tecnico">Técnico</SelectItem>
-                          <SelectItem value="requerente">Requerente</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-gray-500 mt-1">
-                        Defina o nível de acesso do usuário no sistema
+                    {/* Info about profile */}
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <p className="text-sm text-blue-800">
+                        <strong>Perfil:</strong> Corpo Técnico (definido automaticamente)
                       </p>
                     </div>
 
@@ -387,8 +411,11 @@ const CreateUser = () => {
                         placeholder="Digite o nome completo"
                         value={formData.name}
                         onChange={(e) => updateFormField('name', e.target.value)}
-                        className="h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500"
+                        className={`h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500 ${
+                          errors.name ? 'border-red-500' : ''
+                        }`}
                       />
+                      {errors.name && <p className="text-xs text-red-500">{errors.name}</p>}
                     </div>
 
                     {/* CPF Input */}
@@ -402,9 +429,12 @@ const CreateUser = () => {
                         placeholder="000.000.000-00"
                         value={formData.cpf}
                         onChange={(e) => updateFormField('cpf', e.target.value)}
-                        className="h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500"
+                        className={`h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500 ${
+                          errors.cpf ? 'border-red-500' : ''
+                        }`}
                         maxLength={14}
                       />
+                      {errors.cpf && <p className="text-xs text-red-500">{errors.cpf}</p>}
                       <p className="text-xs text-gray-500 mt-1">
                         Informe apenas números, a formatação será automática
                       </p>
@@ -421,8 +451,11 @@ const CreateUser = () => {
                         placeholder="exemplo@exemplo.com"
                         value={formData.email}
                         onChange={(e) => updateFormField('email', e.target.value)}
-                        className="h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500"
+                        className={`h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500 ${
+                          errors.email ? 'border-red-500' : ''
+                        }`}
                       />
+                      {errors.email && <p className="text-xs text-red-500">{errors.email}</p>}
                       <p className="text-xs text-gray-500 mt-1">
                         Este email será usado para login e notificações
                       </p>
@@ -439,9 +472,12 @@ const CreateUser = () => {
                         placeholder="(00) 00000-0000"
                         value={formData.phone}
                         onChange={(e) => updateFormField('phone', e.target.value)}
-                        className="h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500"
+                        className={`h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500 ${
+                          errors.phone ? 'border-red-500' : ''
+                        }`}
                         maxLength={15}
                       />
+                      {errors.phone && <p className="text-xs text-red-500">{errors.phone}</p>}
                       <p className="text-xs text-gray-500 mt-1">Campo opcional</p>
                     </div>
                   </div>
@@ -460,10 +496,20 @@ const CreateUser = () => {
                     <Button
                       type="button"
                       onClick={handleSave}
+                      disabled={loading}
                       className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white h-11 px-6 font-medium shadow-md hover:shadow-lg transition-all duration-200"
                     >
-                      <Save className="w-4 h-4 mr-2" />
-                      Salvar Usuário
+                      {loading ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Criando usuário...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="w-4 h-4 mr-2" />
+                          Salvar Usuário
+                        </>
+                      )}
                     </Button>
                   </div>
                 </div>

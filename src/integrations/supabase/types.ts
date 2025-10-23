@@ -1,3 +1,4 @@
+
 export type Json =
   | string
   | number
@@ -554,6 +555,7 @@ export type Database = {
       }
       usuarios: {
         Row: {
+          auth_user_id: string | null
           celular: string | null
           cpf: string
           created_at: string | null
@@ -563,9 +565,13 @@ export type Database = {
           perfil: string
           senha_hash: string
           status: string | null
+          status_aprovacao: string | null
+          token_senha: string | null
+          token_expiracao: string | null
           updated_at: string | null
         }
         Insert: {
+          auth_user_id?: string | null
           celular?: string | null
           cpf: string
           created_at?: string | null
@@ -575,9 +581,13 @@ export type Database = {
           perfil: string
           senha_hash: string
           status?: string | null
+          status_aprovacao?: string | null
+          token_senha?: string | null
+          token_expiracao?: string | null
           updated_at?: string | null
         }
         Update: {
+          auth_user_id?: string | null
           celular?: string | null
           cpf?: string
           created_at?: string | null
@@ -587,6 +597,9 @@ export type Database = {
           perfil?: string
           senha_hash?: string
           status?: string | null
+          status_aprovacao?: string | null
+          token_senha?: string | null
+          token_expiracao?: string | null
           updated_at?: string | null
         }
         Relationships: []

@@ -32,3 +32,9 @@ forgotPass.html
 
 #style-guide
 style-guide.md
+
+#env
+.env
+
+#supabase
+/supbase
