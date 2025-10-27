@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { toast } from 'sonner';
+import { approveUser, rejectUser, getAllUsers } from '@/services/userService';
 import {
   Home as HomeIcon,
   FileText,
@@ -14,6 +16,9 @@ import {
   ChevronRight,
   Search,
   X,
+  Check,
+  XCircle,
+  Loader2,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -71,9 +76,10 @@ const Users = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [currentPage, setCurrentPage] = useState(1);
-  const totalItems = 85;
+  const [users, setUsers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
   const itemsPerPage = 10;
-  const totalPages = Math.ceil(totalItems / itemsPerPage);
 
   // Filter states
   const [filters, setFilters] = useState({
@@ -81,6 +87,7 @@ const Users = () => {
     name: '',
     profile: '',
     status: '',
+    statusAprovacao: '',
   });
 
   // Navigation items for the sidebar
@@ -111,81 +118,72 @@ const Users = () => {
     navigate('/');
   };
 
-  // Mock users data
-  const users = [
-    {
-      cpf: '999.999-999-99',
-      name: 'xxxxxxxxxxxxxxxxxxx',
-      email: 'teste@gmail.com',
-      phone: '(99) 99999-99999',
-      profile: 'Corpo Técnico',
-      status: 'Ativo',
-    },
-    {
-      cpf: '999.999-999-99',
-      name: 'xxxxxxxxxxxxxxxxxxx',
-      email: 'teste@gmail.com',
-      phone: '(99) 99999-99999',
-      profile: 'Corpo Técnico',
-      status: 'Ativo',
-    },
-    {
-      cpf: '999.999-999-99',
-      name: 'xxxxxxxxxxxxxxxxxxx',
-      email: 'teste@gmail.com',
-      phone: '(99) 99999-99999',
-      profile: 'Corpo Técnico',
-      status: 'Ativo',
-    },
-    {
-      cpf: '999.999-999-99',
-      name: 'xxxxxxxxxxxxxxxxxxx',
-      email: 'teste@gmail.com',
-      phone: '(99) 99999-99999',
-      profile: 'Técnico',
-      status: 'Ativo',
-    },
-    {
-      cpf: '999.999-999-99',
-      name: 'xxxxxxxxxxxxxxxxxxx',
-      email: 'teste@gmail.com',
-      phone: '(99) 99999-99999',
-      profile: 'Técnico',
-      status: 'Ativo',
-    },
-    {
-      cpf: '999.999-999-99',
-      name: 'xxxxxxxxxxxxxxxxxxx',
-      email: 'teste@gmail.com',
-      phone: '(99) 99999-99999',
-      profile: 'Técnico',
-      status: 'Ativo',
-    },
-    {
-      cpf: '99.999.999/9999-99',
-      name: 'xxxxxxxxxxxxxxxxxxx',
-      email: 'teste@gmail.com',
-      phone: '(99) 99999-99999',
-      profile: 'Requerente',
-      status: 'Ativo',
-    },
-    {
-      cpf: '99.999.999/9999-99',
-      name: 'xxxxxxxxxxxxxxxxxxx',
-      email: 'teste@gmail.com',
-      phone: '(99) 99999-99999',
-      profile: 'Requerente',
-      status: 'Ativo',
-    },
-    {
-      cpf: '99.999.999/9999-99',
-      name: 'xxxxxxxxxxxxxxxxxxx',
-      email: 'teste@gmail.com',
-      phone: '(99) 99999-99999',
-      profile: 'Requerente',
-      status: 'Ativo',
-    },
-  ];
+  // Load users from database
+  const loadUsers = async () => {
+    try {
+      setLoading(true);
+      const usersData = await getAllUsers();
+      setUsers(usersData || []);
+    } catch (error) {
+      toast.error('Erro ao carregar usuários');
+      console.error('Error loading users:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle user approval
+  const handleApprove = async (userId: string) => {
+    try {
+      setActionLoading(userId);
+      await approveUser(userId);
+      toast.success('Usuário aprovado com sucesso!');
+      await loadUsers(); // Reload users
+    } catch (error) {
+      toast.error('Erro ao aprovar usuário');
+      console.error('Error approving user:', error);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Handle user rejection
+  const handleReject = async (userId: string) => {
+    try {
+      setActionLoading(userId);
+      await rejectUser(userId);
+      toast.success('Usuário rejeitado');
+      await loadUsers(); // Reload users
+    } catch (error) {
+      toast.error('Erro ao rejeitar usuário');
+      console.error('Error rejecting user:', error);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Load users on component mount
+  useEffect(() => {
+    loadUsers();
+  }, []);
+
+  // Filter users based on current filters
+  const filteredUsers = users.filter((user) => {
+    const matchesCpf = !filters.cpfCnpj || user.cpf?.includes(filters.cpfCnpj);
+    const matchesName = !filters.name || user.nome?.toLowerCase().includes(filters.name.toLowerCase());
+    const matchesProfile = !filters.profile || user.perfil === filters.profile;
+    const matchesStatus = !filters.status || user.status === filters.status;
+    const matchesStatusAprovacao = !filters.statusAprovacao || user.status_aprovacao === filters.statusAprovacao;
+    
+    return matchesCpf && matchesName && matchesProfile && matchesStatus && matchesStatusAprovacao;
+  });
+
+  // Get paginated users
+  const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
+  const paginatedUsers = filteredUsers.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
 
   const handleClearFilters = () => {
     setFilters({
@@ -193,6 +191,7 @@ const Users = () => {
       name: '',
       profile: '',
       status: '',
+      statusAprovacao: '',
     });
   };
 
@@ -455,6 +454,31 @@ const Users = () => {
                       </SelectContent>
                     </Select>
                   </div>
+
+                  {/* Status Aprovação Select */}
+                  <div className="space-y-2">
+                    <Label htmlFor="statusAprovacao" className="text-sm font-medium text-gray-700">
+                      Status Aprovação
+                    </Label>
+                    <Select
+                      value={filters.statusAprovacao}
+                      onValueChange={(value) =>
+                        setFilters({ ...filters, statusAprovacao: value })
+                      }
+                    >
+                      <SelectTrigger
+                        id="statusAprovacao"
+                        className="h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500"
+                      >
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Pendente">Pendente</SelectItem>
+                        <SelectItem value="Aprovado">Aprovado</SelectItem>
+                        <SelectItem value="Rejeitado">Rejeitado</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
                 {/* Action Buttons */}
@@ -504,31 +528,110 @@ const Users = () => {
                         <TableHead className="text-gray-700 font-medium">Celular</TableHead>
                         <TableHead className="text-gray-700 font-medium">Perfil</TableHead>
                         <TableHead className="text-gray-700 font-medium">Status</TableHead>
+                        <TableHead className="text-gray-700 font-medium">Status Aprovação</TableHead>
                         <TableHead className="text-gray-700 font-medium text-right">
                           Ações
                         </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {users.map((user, index) => (
+                      {loading ? (
+                        <TableRow>
+                          <TableCell colSpan={8} className="text-center py-8">
+                            <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-emerald-600" />
+                            <p className="text-gray-600">Carregando usuários...</p>
+                          </TableCell>
+                        </TableRow>
+                      ) : paginatedUsers.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={8} className="text-center py-8">
+                            <p className="text-gray-600">Nenhum usuário encontrado</p>
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        paginatedUsers.map((user, index) => (
                         <TableRow
-                          key={index}
+                            key={user.id || index}
                           className="hover:bg-gray-50 transition-colors"
                         >
                           <TableCell className="font-medium text-gray-800">
                             {user.cpf}
                           </TableCell>
-                          <TableCell className="text-gray-600">{user.name}</TableCell>
+                            <TableCell className="text-gray-600">{user.nome}</TableCell>
                           <TableCell className="text-gray-600">{user.email}</TableCell>
-                          <TableCell className="text-gray-600">{user.phone}</TableCell>
-                          <TableCell className="text-gray-600">{user.profile}</TableCell>
+                            <TableCell className="text-gray-600">{user.celular}</TableCell>
+                            <TableCell className="text-gray-600">{user.perfil}</TableCell>
                           <TableCell>
                             <Badge className="bg-emerald-600 hover:bg-emerald-600 text-white">
-                              {user.status}
+                                {user.status || 'Ativo'}
                             </Badge>
+                          </TableCell>
+                            <TableCell>
+                              {user.status_aprovacao ? (
+                                <Badge
+                                  className={`${
+                                    user.status_aprovacao === 'Aprovado'
+                                      ? 'bg-green-600 hover:bg-green-600'
+                                      : user.status_aprovacao === 'Pendente'
+                                      ? 'bg-yellow-500 hover:bg-yellow-500'
+                                      : 'bg-red-600 hover:bg-red-600'
+                                  } text-white`}
+                                >
+                                  {user.status_aprovacao}
+                                </Badge>
+                              ) : (
+                                <span className="text-gray-400">-</span>
+                              )}
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
+                                {/* Approval buttons for Corpo Técnico with pending status */}
+                                {(user.perfil === 'Corpo Técnico' || user.perfil === 'corpo_tecnico') && user.status_aprovacao === 'Pendente' && (
+                                  <>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          onClick={() => user.auth_user_id ? handleApprove(user.auth_user_id) : toast.error('Usuário sem auth_user_id')}
+                                          disabled={actionLoading === user.id || !user.auth_user_id}
+                                          className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50 hover:scale-110 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                                        >
+                                          {actionLoading === user.id ? (
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                          ) : (
+                                            <Check className="h-4 w-4" />
+                                          )}
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>{user.auth_user_id ? 'Aprovar usuário' : 'Usuário sem auth_user_id - não pode ser aprovado'}</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          onClick={() => user.auth_user_id ? handleReject(user.auth_user_id) : toast.error('Usuário sem auth_user_id')}
+                                          disabled={actionLoading === user.id || !user.auth_user_id}
+                                          className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50 hover:scale-110 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                                        >
+                                          {actionLoading === user.id ? (
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                          ) : (
+                                            <XCircle className="h-4 w-4" />
+                                          )}
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>{user.auth_user_id ? 'Rejeitar usuário' : 'Usuário sem auth_user_id - não pode ser rejeitado'}</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </>
+                                )}
+
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <Button
@@ -561,7 +664,8 @@ const Users = () => {
                             </div>
                           </TableCell>
                         </TableRow>
-                      ))}
+                        ))
+                      )}
                     </TableBody>
                   </Table>
                 </div>
@@ -572,7 +676,7 @@ const Users = () => {
                     {/* Results info */}
                     <div className="text-sm text-gray-600">
                       Mostrando {(currentPage - 1) * itemsPerPage + 1}-
-                      {Math.min(currentPage * itemsPerPage, totalItems)} de {totalItems}{' '}
+                      {Math.min(currentPage * itemsPerPage, filteredUsers.length)} de {filteredUsers.length}{' '}
                       resultados
                     </div>
 

@@ -1,19 +1,16 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Eye, EyeOff, Loader2, Leaf, ArrowLeft } from 'lucide-react';
+import { Eye, EyeOff, Loader2, Leaf, ArrowLeft, CheckCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { z } from 'zod';
+import { validatePasswordToken, clearPasswordToken } from '@/services/userService';
 
-const signupSchema = z.object({
-  nome: z.string().min(3, 'Nome deve ter pelo menos 3 caracteres').max(255),
-  email: z.string().email('Email inválido'),
-  cpf: z.string().regex(/^\d{3}\.\d{3}\.\d{3}-\d{2}$|^\d{11}$/, 'CPF inválido'),
-  celular: z.string().regex(/^\(\d{2}\)\s?\d{4,5}-?\d{4}$|^\d{10,11}$/, 'Celular inválido').optional(),
+const passwordSchema = z.object({
   password: z.string().min(6, 'Senha deve ter pelo menos 6 caracteres'),
   confirmPassword: z.string(),
 }).refine((data) => data.password === data.confirmPassword, {
@@ -21,53 +18,59 @@ const signupSchema = z.object({
   path: ['confirmPassword'],
 });
 
-const FirstAccess = () => {
+const SetPassword = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [validating, setValidating] = useState(true);
+  const [tokenValid, setTokenValid] = useState(false);
+  const [userData, setUserData] = useState<any>(null);
+
+  const token = searchParams.get('token');
+  const email = searchParams.get('email');
 
   const [formData, setFormData] = useState({
-    nome: '',
-    email: '',
-    cpf: '',
-    celular: '',
     password: '',
     confirmPassword: '',
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const formatCPF = (value: string) => {
-    const numbers = value.replace(/\D/g, '');
-    if (numbers.length <= 11) {
-      return numbers.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
-    }
-    return value;
-  };
+  useEffect(() => {
+    validateToken();
+  }, []);
 
-  const formatCelular = (value: string) => {
-    const numbers = value.replace(/\D/g, '');
-    if (numbers.length <= 11) {
-      if (numbers.length === 11) {
-        return numbers.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
-      } else if (numbers.length === 10) {
-        return numbers.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
-      }
+  const validateToken = async () => {
+    if (!token || !email) {
+      toast({
+        variant: 'destructive',
+        title: 'Link inválido',
+        description: 'Token ou email não encontrados no link.',
+      });
+      setValidating(false);
+      return;
     }
-    return value;
+
+    try {
+      const user = await validatePasswordToken(token, email);
+      setUserData(user);
+      setTokenValid(true);
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Token inválido',
+        description: 'Este link expirou ou é inválido. Solicite um novo convite.',
+      });
+      setTokenValid(false);
+    } finally {
+      setValidating(false);
+    }
   };
 
   const handleInputChange = (field: string, value: string) => {
-    let formattedValue = value;
-
-    if (field === 'cpf') {
-      formattedValue = formatCPF(value);
-    } else if (field === 'celular') {
-      formattedValue = formatCelular(value);
-    }
-
-    setFormData(prev => ({ ...prev, [field]: formattedValue }));
+    setFormData(prev => ({ ...prev, [field]: value }));
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
     }
@@ -79,49 +82,29 @@ const FirstAccess = () => {
     setLoading(true);
 
     try {
-      const validatedData = signupSchema.parse(formData);
+      const validatedData = passwordSchema.parse(formData);
 
-      const { data, error } = await supabase.auth.signUp({
-        email: validatedData.email,
-        password: validatedData.password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/`,
-          data: {
-            nome: validatedData.nome.trim(),
-            cpf: validatedData.cpf.replace(/\D/g, ''),
-            celular: validatedData.celular?.replace(/\D/g, '') || '',
-            perfil: 'corpo_tecnico',
-          },
-        },
+      // Update user password in auth
+      const { error } = await supabase.auth.updateUser({
+        password: validatedData.password
       });
 
       if (error) {
-        if (error.message.includes('already registered')) {
-          toast({
-            variant: 'destructive',
-            title: 'Erro no cadastro',
-            description: 'Este email já está registrado. Tente fazer login.',
-          });
-        } else {
-          toast({
-            variant: 'destructive',
-            title: 'Erro no cadastro',
-            description: error.message,
-          });
-        }
-        return;
+        throw new Error(error.message);
       }
 
-      if (data.user) {
-        toast({
-          title: 'Conta criada com sucesso!',
-          description: 'Verifique seu email para confirmar o cadastro. Após confirmação, aguarde aprovação de um administrador.',
-        });
+      // Clear the password token
+      await clearPasswordToken(userData.id);
 
-        setTimeout(() => {
-          navigate('/');
-        }, 3000);
-      }
+      toast({
+        title: 'Senha definida com sucesso!',
+        description: 'Você já pode fazer login com sua nova senha.',
+      });
+
+      setTimeout(() => {
+        navigate('/');
+      }, 2000);
+
     } catch (error) {
       if (error instanceof z.ZodError) {
         const fieldErrors: Record<string, string> = {};
@@ -137,11 +120,47 @@ const FirstAccess = () => {
           title: 'Erro de validação',
           description: 'Por favor, corrija os campos destacados.',
         });
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Erro ao definir senha',
+          description: error instanceof Error ? error.message : 'Erro inesperado.',
+        });
       }
     } finally {
       setLoading(false);
     }
   };
+
+  if (validating) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-emerald-600" />
+          <p className="text-gray-600">Validando link...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!tokenValid) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center max-w-md mx-auto p-6">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="text-red-600 text-2xl">✕</span>
+          </div>
+          <h1 className="text-2xl font-bold text-gray-800 mb-2">Link Inválido</h1>
+          <p className="text-gray-600 mb-6">
+            Este link expirou ou é inválido. Solicite um novo convite ao administrador.
+          </p>
+          <Button onClick={() => navigate('/')} className="bg-emerald-600 hover:bg-emerald-700">
+            Voltar ao Login
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col lg:flex-row overflow-hidden">
@@ -204,12 +223,12 @@ const FirstAccess = () => {
             transition={{ delay: 0.7 }}
             className="text-xl text-white/90 leading-relaxed"
           >
-            Crie sua conta e comece a monitorar sua mina ambiental
+            Defina sua senha para acessar o sistema MinAmbiental
           </motion.p>
         </div>
       </motion.div>
 
-      {/* Right Side - Signup Form */}
+      {/* Right Side - Password Form */}
       <motion.div
         initial={{ opacity: 0, x: 50 }}
         animate={{ opacity: 1, x: 0 }}
@@ -242,7 +261,7 @@ const FirstAccess = () => {
             Voltar para login
           </motion.button>
 
-          {/* Signup Card */}
+          {/* Password Card */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -250,92 +269,17 @@ const FirstAccess = () => {
             className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100"
           >
             <div className="mb-6">
-              <h2 className="text-2xl font-bold text-gray-800 mb-2">Criar conta</h2>
-              <p className="text-gray-600">Preencha seus dados para começar</p>
+              <h2 className="text-2xl font-bold text-gray-800 mb-2">Definir Senha</h2>
+              <p className="text-gray-600">
+                Olá <span className="font-semibold">{userData?.nome}</span>, defina sua senha para continuar
+              </p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Nome */}
-              <div className="space-y-2">
-                <Label htmlFor="nome" className="text-sm font-medium text-gray-700">
-                  Nome Completo *
-                </Label>
-                <Input
-                  id="nome"
-                  type="text"
-                  placeholder="Seu nome completo"
-                  value={formData.nome}
-                  onChange={(e) => handleInputChange('nome', e.target.value)}
-                  className={`h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500 ${
-                    errors.nome ? 'border-red-500' : ''
-                  }`}
-                  required
-                />
-                {errors.nome && <p className="text-xs text-red-500">{errors.nome}</p>}
-              </div>
-
-              {/* Email */}
-              <div className="space-y-2">
-                <Label htmlFor="email" className="text-sm font-medium text-gray-700">
-                  Email *
-                </Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="seu@email.com"
-                  value={formData.email}
-                  onChange={(e) => handleInputChange('email', e.target.value)}
-                  className={`h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500 ${
-                    errors.email ? 'border-red-500' : ''
-                  }`}
-                  required
-                />
-                {errors.email && <p className="text-xs text-red-500">{errors.email}</p>}
-              </div>
-
-              {/* CPF */}
-              <div className="space-y-2">
-                <Label htmlFor="cpf" className="text-sm font-medium text-gray-700">
-                  CPF *
-                </Label>
-                <Input
-                  id="cpf"
-                  type="text"
-                  placeholder="000.000.000-00"
-                  value={formData.cpf}
-                  onChange={(e) => handleInputChange('cpf', e.target.value)}
-                  className={`h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500 ${
-                    errors.cpf ? 'border-red-500' : ''
-                  }`}
-                  maxLength={14}
-                  required
-                />
-                {errors.cpf && <p className="text-xs text-red-500">{errors.cpf}</p>}
-              </div>
-
-              {/* Celular */}
-              <div className="space-y-2">
-                <Label htmlFor="celular" className="text-sm font-medium text-gray-700">
-                  Celular
-                </Label>
-                <Input
-                  id="celular"
-                  type="text"
-                  placeholder="(00) 00000-0000"
-                  value={formData.celular}
-                  onChange={(e) => handleInputChange('celular', e.target.value)}
-                  className={`h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500 ${
-                    errors.celular ? 'border-red-500' : ''
-                  }`}
-                  maxLength={15}
-                />
-                {errors.celular && <p className="text-xs text-red-500">{errors.celular}</p>}
-              </div>
-
               {/* Senha */}
               <div className="space-y-2">
                 <Label htmlFor="password" className="text-sm font-medium text-gray-700">
-                  Senha *
+                  Nova Senha *
                 </Label>
                 <div className="relative">
                   <Input
@@ -363,7 +307,7 @@ const FirstAccess = () => {
               {/* Confirmar Senha */}
               <div className="space-y-2">
                 <Label htmlFor="confirmPassword" className="text-sm font-medium text-gray-700">
-                  Confirmar Senha *
+                  Confirmar Nova Senha *
                 </Label>
                 <div className="relative">
                   <Input
@@ -397,10 +341,13 @@ const FirstAccess = () => {
                 {loading ? (
                   <>
                     <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                    Criando conta...
+                    Definindo senha...
                   </>
                 ) : (
-                  'Criar Conta'
+                  <>
+                    <CheckCircle className="w-5 h-5 mr-2" />
+                    Definir Senha
+                  </>
                 )}
               </Button>
             </form>
@@ -421,4 +368,5 @@ const FirstAccess = () => {
   );
 };
 
-export default FirstAccess;
+export default SetPassword;
+
