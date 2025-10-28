@@ -142,7 +142,10 @@ const CreateUser = () => {
 
       // Mensagem condicional
       if (result.requiresApproval) {
-        toast.success('Usuário Corpo Técnico criado! Aguardando aprovação do administrador. Email de convite enviado.');
+        toast.success(
+          `Usuário Corpo Técnico criado! Email de convite enviado para ${validatedData.email}`,
+          { duration: 5000 }
+        );
       } else {
         toast.success(`Usuário ${validatedData.perfil} criado e aprovado automaticamente!`);
       }
