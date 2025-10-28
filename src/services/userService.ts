@@ -65,7 +65,7 @@ export async function createUserWithInvite(userData: CreateUserData): Promise<vo
         token_expiracao: tokenExpiration.toISOString(),
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-      });
+      } as any);
 
     if (insertError) {
       // If insert fails, try to clean up the auth user
@@ -142,7 +142,7 @@ export async function getUserApprovalStatus(authUserId: string): Promise<UserApp
   console.log('User data from database:', data); // Debug
 
   const isCorpoTecnico = data.perfil === 'Corpo Técnico';
-  const isApproved = !isCorpoTecnico || data.status_aprovacao === 'Aprovado';
+  const isApproved = isCorpoTecnico && data.status_aprovacao === 'Aprovado';
 
   console.log('Approval status result:', { isCorpoTecnico, isApproved, status: data.status_aprovacao }); // Debug
 
@@ -153,20 +153,6 @@ export async function getUserApprovalStatus(authUserId: string): Promise<UserApp
   };
 }
 
-/**
- * Validate if a corpo tecnico user is approved
- */
-export async function validateCorpoTecnicoApproved(authUserId: string): Promise<boolean> {
-  const { data, error } = await supabase.rpc('validate_corpo_tecnico_approved', {
-    user_id: authUserId
-  });
-
-  if (error) {
-    throw new Error(`Erro ao validar aprovação: ${error.message}`);
-  }
-
-  return data;
-}
 
 /**
  * Get all users for admin view
