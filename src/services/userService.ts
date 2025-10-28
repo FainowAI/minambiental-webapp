@@ -38,7 +38,7 @@ export async function createUserWithInvite(userData: CreateUserData): Promise<vo
         nome: userData.nome,
         cpf: userData.cpf,
         celular: userData.celular,
-        perfil: 'corpo_tecnico',
+        perfil: 'Corpo Técnico',
       },
     });
 
@@ -59,7 +59,7 @@ export async function createUserWithInvite(userData: CreateUserData): Promise<vo
         email: userData.email,
         cpf: userData.cpf,
         celular: userData.celular,
-        perfil: 'corpo_tecnico',
+        perfil: 'Corpo Técnico',
         status_aprovacao: 'Aprovado', // Already approved by admin
         token_senha: token,
         token_expiracao: tokenExpiration.toISOString(),

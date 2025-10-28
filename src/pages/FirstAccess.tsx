@@ -90,7 +90,7 @@ const FirstAccess = () => {
             nome: validatedData.nome.trim(),
             cpf: validatedData.cpf.replace(/\D/g, ''),
             celular: validatedData.celular?.replace(/\D/g, '') || '',
-            perfil: 'corpo_tecnico',
+            perfil: 'Corpo Técnico',
           },
         },
       });
@@ -122,7 +122,7 @@ const FirstAccess = () => {
             email: validatedData.email,
             cpf: validatedData.cpf.replace(/\D/g, ''),
             celular: validatedData.celular?.replace(/\D/g, '') || '',
-            perfil: 'corpo_tecnico',
+            perfil: 'Corpo Técnico',
             status_aprovacao: 'Pendente',
             senha_hash: null,
           } as any);
