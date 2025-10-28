@@ -43,18 +43,65 @@ const SetPassword = () => {
   }, []);
 
   const validateToken = async () => {
-    if (!token || !email) {
+    // Verificar se é fluxo via Supabase Auth (token no hash)
+    const hashParams = new URLSearchParams(window.location.hash.substring(1));
+    const accessToken = hashParams.get('access_token');
+    
+    if (accessToken) {
+      // Fluxo via resetPasswordForEmail do Supabase
+      await validateSupabaseAuthToken();
+    } else if (token && email) {
+      // Fluxo com token customizado (compatibilidade)
+      await validateCustomToken();
+    } else {
+      // Nenhum token válido
       toast({
         variant: 'destructive',
         title: 'Link inválido',
         description: 'Token ou email não encontrados no link.',
       });
       setValidating(false);
-      return;
+      setTokenValid(false);
     }
+  };
 
+  const validateSupabaseAuthToken = async () => {
     try {
-      const user = await validatePasswordToken(token, email);
+      // O Supabase já valida o token automaticamente via hash
+      const { data: { user }, error } = await supabase.auth.getUser();
+      
+      if (error || !user) {
+        throw new Error('Token inválido');
+      }
+
+      // Buscar dados do usuário na tabela usuarios
+      const { data: usuario, error: userError } = await supabase
+        .from('usuarios')
+        .select('*')
+        .eq('auth_user_id', user.id)
+        .single();
+
+      if (userError || !usuario) {
+        throw new Error('Usuário não encontrado');
+      }
+
+      setUserData(usuario);
+      setTokenValid(true);
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Token inválido',
+        description: 'Este link expirou ou é inválido. Solicite um novo convite.',
+      });
+      setTokenValid(false);
+    } finally {
+      setValidating(false);
+    }
+  };
+
+  const validateCustomToken = async () => {
+    try {
+      const user = await validatePasswordToken(token!, email!);
       setUserData(user);
       setTokenValid(true);
     } catch (error) {
@@ -93,8 +140,10 @@ const SetPassword = () => {
         throw new Error(error.message);
       }
 
-      // Clear the password token
-      await clearPasswordToken(userData.id);
+      // Clear the password token (apenas se for fluxo customizado)
+      if (userData?.id && token) {
+        await clearPasswordToken(userData.id);
+      }
 
       toast({
         title: 'Senha definida com sucesso!',

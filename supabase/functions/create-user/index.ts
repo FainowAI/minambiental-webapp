@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { Resend } from "https://esm.sh/resend@2.0.0";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -153,82 +152,23 @@ serve(async (req) => {
       );
     }
 
-    // 9. Enviar email se for Corpo Técnico
-    if (isCorpoTecnico && token_senha) {
+    // 9. Enviar email via Supabase Auth se for Corpo Técnico
+    if (isCorpoTecnico && baseUrl) {
       try {
-        const resend = new Resend(Deno.env.get('RESEND_API_KEY'));
-        const inviteLink = `${baseUrl}/set-password?token=${token_senha}&email=${encodeURIComponent(email)}`;
+        const { error: resetError } = await supabase.auth.resetPasswordForEmail(
+          email,
+          {
+            redirectTo: `${baseUrl}/set-password?email=${encodeURIComponent(email)}`
+          }
+        );
         
-        const { error: emailError } = await resend.emails.send({
-          from: 'MinAmbiental <onboarding@resend.dev>',
-          to: [email],
-          subject: 'Convite - Defina sua senha | MinAmbiental',
-          html: `
-            <!DOCTYPE html>
-            <html>
-            <head>
-              <meta charset="utf-8">
-              <style>
-                body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-                .header { background: linear-gradient(135deg, #059669 0%, #14b8a6 100%); color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0; }
-                .content { background: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px; }
-                .button { display: inline-block; background: #059669; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: bold; margin: 20px 0; }
-                .footer { text-align: center; margin-top: 20px; color: #6b7280; font-size: 12px; }
-                .warning { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px; margin: 20px 0; border-radius: 4px; }
-              </style>
-            </head>
-            <body>
-              <div class="container">
-                <div class="header">
-                  <h1>🌿 Bem-vindo ao MinAmbiental</h1>
-                </div>
-                <div class="content">
-                  <p>Olá <strong>${nome}</strong>,</p>
-                  
-                  <p>Você foi convidado para se juntar ao sistema MinAmbiental como <strong>Corpo Técnico</strong>.</p>
-                  
-                  <p>Para ativar sua conta, você precisa definir uma senha de acesso. Clique no botão abaixo:</p>
-                  
-                  <div style="text-align: center;">
-                    <a href="${inviteLink}" class="button">Definir Minha Senha</a>
-                  </div>
-                  
-                  <p style="color: #6b7280; font-size: 14px;">Ou copie e cole este link no navegador:</p>
-                  <p style="background: #e5e7eb; padding: 10px; border-radius: 4px; word-break: break-all; font-size: 12px;">
-                    ${inviteLink}
-                  </p>
-                  
-                  <div class="warning">
-                    <strong>⚠️ Importante:</strong>
-                    <ul style="margin: 8px 0 0 0; padding-left: 20px;">
-                      <li>Este link é válido por <strong>7 dias</strong></li>
-                      <li>Seu acesso será liberado após aprovação do administrador</li>
-                      <li>Se você não solicitou este convite, ignore este email</li>
-                    </ul>
-                  </div>
-                  
-                  <p>Se tiver alguma dúvida, entre em contato com o administrador do sistema.</p>
-                  
-                  <p style="margin-top: 30px;">Atenciosamente,<br><strong>Equipe MinAmbiental</strong></p>
-                </div>
-                <div class="footer">
-                  <p>© 2024 MinAmbiental. Todos os direitos reservados.</p>
-                  <p>Este é um email automático, por favor não responda.</p>
-                </div>
-              </div>
-            </body>
-            </html>
-          `,
-        });
-        
-        if (emailError) {
-          console.error('Email send error:', emailError);
+        if (resetError) {
+          console.error('Erro ao enviar email de redefinição:', resetError);
         } else {
-          console.log('Invite email sent successfully to:', email);
+          console.log('Email de redefinição enviado com sucesso para:', email);
         }
       } catch (emailError) {
-        console.error('Failed to send invite email:', emailError);
+        console.error('Falha ao enviar email:', emailError);
       }
     }
 
