@@ -1,4 +1,3 @@
-
 export type Json =
   | string
   | number
@@ -622,11 +621,11 @@ export type Database = {
           id: string
           nome: string
           perfil: string
-          senha_hash: string
+          senha_hash: string | null
           status: string | null
           status_aprovacao: string | null
-          token_senha: string | null
           token_expiracao: string | null
+          token_senha: string | null
           updated_at: string | null
         }
         Insert: {
@@ -638,11 +637,11 @@ export type Database = {
           id?: string
           nome: string
           perfil: string
-          senha_hash: string
+          senha_hash?: string | null
           status?: string | null
           status_aprovacao?: string | null
-          token_senha?: string | null
           token_expiracao?: string | null
+          token_senha?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -654,11 +653,11 @@ export type Database = {
           id?: string
           nome?: string
           perfil?: string
-          senha_hash?: string
+          senha_hash?: string | null
           status?: string | null
           status_aprovacao?: string | null
-          token_senha?: string | null
           token_expiracao?: string | null
+          token_senha?: string | null
           updated_at?: string | null
         }
         Relationships: []
@@ -688,18 +687,9 @@ export type Database = {
         Args: { invitation_token: string; user_id: string }
         Returns: Json
       }
-      expire_old_invitations: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      generate_invitation_token: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
-      get_invitation_by_token: {
-        Args: { token: string }
-        Returns: Json
-      }
+      expire_old_invitations: { Args: never; Returns: undefined }
+      generate_invitation_token: { Args: never; Returns: string }
+      get_invitation_by_token: { Args: { token: string }; Returns: Json }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
