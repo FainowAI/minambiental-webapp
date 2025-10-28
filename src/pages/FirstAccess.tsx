@@ -113,30 +113,7 @@ const FirstAccess = () => {
       }
 
       if (data.user) {
-        // Inserir na tabela usuarios com status Pendente
-        const { error: insertError } = await supabase
-          .from('usuarios')
-          .insert({
-            auth_user_id: data.user.id,
-            nome: validatedData.nome.trim(),
-            email: validatedData.email,
-            cpf: validatedData.cpf.replace(/\D/g, ''),
-            celular: validatedData.celular?.replace(/\D/g, '') || '',
-            perfil: 'Corpo Técnico',
-            status_aprovacao: 'Pendente',
-            senha_hash: null,
-          } as any);
-
-        if (insertError) {
-          console.error('Erro ao criar registro em usuarios:', insertError);
-          toast({
-            variant: 'destructive',
-            title: 'Erro no cadastro',
-            description: 'Não foi possível completar o registro. Tente novamente.',
-          });
-          return;
-        }
-
+        // O trigger handle_new_user já insere automaticamente em usuarios
         toast({
           title: 'Conta criada com sucesso!',
           description: 'Verifique seu email para confirmar o cadastro. Após confirmação, aguarde aprovação de um administrador.',
