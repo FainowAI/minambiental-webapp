@@ -5,6 +5,7 @@ export interface CreateUserData {
   email: string;
   cpf: string;
   celular?: string;
+  perfil: 'Corpo Técnico' | 'Requerente' | 'Técnico';
 }
 
 export interface UserApprovalStatus {
@@ -22,66 +23,41 @@ export async function generatePasswordToken(): Promise<string> {
 }
 
 /**
- * Create a new user with invite (admin function)
+ * Create a new user with invite (Corpo Técnico function)
  */
-export async function createUserWithInvite(userData: CreateUserData): Promise<void> {
+export async function createUserWithInvite(userData: CreateUserData): Promise<{
+  success: boolean;
+  inviteLink?: string;
+  requiresApproval: boolean;
+  user?: any;
+}> {
   try {
-    // Generate token for password setup (simple token generation)
-    const token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-    const tokenExpiration = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
-
-    // Create user in auth first (without password)
-    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-      email: userData.email,
-      email_confirm: true, // Auto-confirm email
-      user_metadata: {
-        nome: userData.nome,
-        cpf: userData.cpf,
-        celular: userData.celular,
-        perfil: 'Corpo Técnico',
-      },
-    });
-
-    if (authError) {
-      throw new Error(`Erro ao criar usuário no auth: ${authError.message}`);
-    }
-
-    if (!authData.user) {
-      throw new Error('Usuário não foi criado no auth');
-    }
-
-    // Create user in usuarios table
-    const { error: insertError } = await supabase
-      .from('usuarios')
-      .insert({
-        auth_user_id: authData.user.id,
+    const { data, error } = await supabase.functions.invoke('create-user', {
+      body: {
         nome: userData.nome,
         email: userData.email,
         cpf: userData.cpf,
         celular: userData.celular,
-        perfil: 'Corpo Técnico',
-        status_aprovacao: 'Aprovado', // Already approved by admin
-        token_senha: token,
-        token_expiracao: tokenExpiration.toISOString(),
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      } as any);
+        perfil: userData.perfil,
+        baseUrl: window.location.origin,
+      },
+    });
 
-    if (insertError) {
-      // If insert fails, try to clean up the auth user
-      await supabase.auth.admin.deleteUser(authData.user.id);
-      throw new Error(`Erro ao criar usuário na tabela usuarios: ${insertError.message}`);
+    if (error) {
+      // Tratamento de erros específicos
+      if (error.message?.includes('403') || error.message?.includes('Sem permissão')) {
+        throw new Error('Você não tem permissão para criar usuários.');
+      }
+      if (error.message?.includes('409') || error.message?.includes('já cadastrado')) {
+        throw new Error('CPF ou email já cadastrado no sistema.');
+      }
+      if (error.message?.includes('401') || error.message?.includes('autenticação')) {
+        throw new Error('Sessão expirada. Faça login novamente.');
+      }
+      throw new Error(error.message || 'Erro ao criar usuário');
     }
 
-    // Send invite email with custom link
-    const inviteLink = `${window.location.origin}/set-password?token=${token}&email=${encodeURIComponent(userData.email)}`;
-    
-    // TODO: Implement email sending service
-    console.log('Invite link:', inviteLink);
-    
-    // For now, we'll use a simple alert
-    alert(`Link de convite gerado: ${inviteLink}`);
-    
+    return data;
   } catch (error) {
     console.error('Error creating user with invite:', error);
     throw error;

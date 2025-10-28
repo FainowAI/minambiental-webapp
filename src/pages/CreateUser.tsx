@@ -66,6 +66,7 @@ interface UserFormData {
   cpf: string;
   email: string;
   phone: string;
+  perfil: 'Corpo Técnico' | 'Requerente' | 'Técnico';
 }
 
 // Validation schema
@@ -74,6 +75,7 @@ const userSchema = z.object({
   cpf: z.string().regex(/^\d{3}\.\d{3}\.\d{3}-\d{2}$|^\d{11}$/, 'CPF inválido'),
   email: z.string().email('Email inválido'),
   phone: z.string().regex(/^\(\d{2}\)\s?\d{4,5}-?\d{4}$|^\d{10,11}$/, 'Celular inválido').optional(),
+  perfil: z.enum(['Corpo Técnico', 'Requerente', 'Técnico']),
 });
 
 const CreateUser = () => {
@@ -86,6 +88,7 @@ const CreateUser = () => {
     cpf: '',
     email: '',
     phone: '',
+    perfil: 'Requerente',
   });
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -129,14 +132,21 @@ const CreateUser = () => {
     try {
       const validatedData = userSchema.parse(formData);
 
-      await createUserWithInvite({
+      const result = await createUserWithInvite({
         nome: validatedData.name,
         cpf: validatedData.cpf.replace(/\D/g, ''),
         email: validatedData.email,
         celular: validatedData.phone?.replace(/\D/g, ''),
+        perfil: validatedData.perfil,
       });
 
-      toast.success('Usuário criado com sucesso! Link de convite foi gerado.');
+      // Mensagem condicional
+      if (result.requiresApproval) {
+        toast.success('Usuário Corpo Técnico criado! Aguardando aprovação do administrador. Email de convite enviado.');
+      } else {
+        toast.success(`Usuário ${validatedData.perfil} criado e aprovado automaticamente!`);
+      }
+      
       navigate('/users');
 
     } catch (error) {
@@ -393,11 +403,42 @@ const CreateUser = () => {
 
                   {/* Form Fields */}
                   <div className="space-y-6">
-                    {/* Info about profile */}
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                      <p className="text-sm text-blue-800">
-                        <strong>Perfil:</strong> Corpo Técnico (definido automaticamente)
-                      </p>
+                    {/* Perfil Selection */}
+                    <div className="space-y-2">
+                      <Label htmlFor="perfil" className="text-sm font-medium text-gray-700">
+                        Perfil <span className="text-red-500">*</span>
+                      </Label>
+                      <Select
+                        value={formData.perfil}
+                        onValueChange={(value) => updateFormField('perfil', value as UserFormData['perfil'])}
+                      >
+                        <SelectTrigger className="h-11 border-gray-300 focus:border-emerald-500">
+                          <SelectValue placeholder="Selecione o perfil" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Requerente">Requerente</SelectItem>
+                          <SelectItem value="Técnico">Técnico</SelectItem>
+                          <SelectItem value="Corpo Técnico">Corpo Técnico</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {errors.perfil && <p className="text-xs text-red-500">{errors.perfil}</p>}
+                      
+                      {/* Avisos condicionais */}
+                      {formData.perfil === 'Corpo Técnico' && (
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-2">
+                          <p className="text-sm text-blue-800">
+                            <strong>Atenção:</strong> Usuários do Corpo Técnico precisarão de aprovação do administrador. Um email com link de convite será enviado.
+                          </p>
+                        </div>
+                      )}
+                      
+                      {(formData.perfil === 'Requerente' || formData.perfil === 'Técnico') && (
+                        <div className="bg-green-50 border border-green-200 rounded-lg p-3 mt-2">
+                          <p className="text-sm text-green-800">
+                            <strong>Info:</strong> Este usuário será aprovado automaticamente e poderá acessar o sistema imediatamente.
+                          </p>
+                        </div>
+                      )}
                     </div>
 
                     {/* Nome Input */}
