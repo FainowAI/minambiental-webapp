@@ -137,7 +137,7 @@ serve(async (req) => {
         cpf,
         celular: celular || null,
         perfil,
-        status_aprovacao: isCorpoTecnico ? 'Pendente' : 'Aprovado',
+        status_aprovacao: 'Pendente', // Todos os perfis iniciam como Pendente
         token_senha,
         token_expiracao,
       });
@@ -175,7 +175,7 @@ serve(async (req) => {
     // 10. Retornar resposta apropriada
     const response: any = {
       success: true,
-      requiresApproval: isCorpoTecnico,
+      requiresApproval: true, // Todos os perfis agora precisam de aprovação
       user: { nome, email, perfil },
     };
 

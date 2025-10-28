@@ -9,6 +9,7 @@ import ForgotPassword from "./pages/ForgotPassword";
 import PasswordResetConfirmation from "./pages/PasswordResetConfirmation";
 import ResetPassword from "./pages/ResetPassword";
 import SetPassword from "./pages/SetPassword";
+import PendingApproval from "./pages/PendingApproval";
 import Dashboard from "./pages/Dashboard";
 import Home from "./pages/Home";
 import Users from "./pages/Users";
@@ -34,6 +35,7 @@ const App = () => (
           <Route path="/password-reset-confirmation" element={<PasswordResetConfirmation />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/set-password" element={<SetPassword />} />
+          <Route path="/pending-approval" element={<PendingApproval />} />
           
           {/* Protected Routes */}
           <Route path="/home" element={

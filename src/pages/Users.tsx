@@ -71,6 +71,15 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 const Users = () => {
   const navigate = useNavigate();
@@ -79,6 +88,7 @@ const Users = () => {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [showNoResultsDialog, setShowNoResultsDialog] = useState(false);
   const itemsPerPage = 10;
 
   // Filter states
@@ -169,11 +179,16 @@ const Users = () => {
 
   // Filter users based on current filters
   const filteredUsers = users.filter((user) => {
-    const matchesCpf = !filters.cpfCnpj || user.cpf?.includes(filters.cpfCnpj);
-    const matchesName = !filters.name || user.nome?.toLowerCase().includes(filters.name.toLowerCase());
-    const matchesProfile = !filters.profile || user.perfil === filters.profile;
-    const matchesStatus = !filters.status || user.status === filters.status;
-    const matchesStatusAprovacao = !filters.statusAprovacao || user.status_aprovacao === filters.statusAprovacao;
+    const matchesCpf = !filters.cpfCnpj || 
+      user.cpf?.toLowerCase().includes(filters.cpfCnpj.toLowerCase().replace(/[^\d]/g, ''));
+    const matchesName = !filters.name || 
+      user.nome?.toLowerCase().includes(filters.name.toLowerCase());
+    const matchesProfile = !filters.profile || 
+      user.perfil?.toLowerCase() === filters.profile.toLowerCase();
+    const matchesStatus = !filters.status || 
+      user.status?.toLowerCase() === filters.status.toLowerCase();
+    const matchesStatusAprovacao = !filters.statusAprovacao || 
+      user.status_aprovacao?.toLowerCase() === filters.statusAprovacao.toLowerCase();
     
     return matchesCpf && matchesName && matchesProfile && matchesStatus && matchesStatusAprovacao;
   });
@@ -193,11 +208,47 @@ const Users = () => {
       status: '',
       statusAprovacao: '',
     });
+    setCurrentPage(1);
   };
 
   const handleSearch = () => {
     console.log('Search with filters:', filters);
-    // Add search logic here
+    setCurrentPage(1); // Reset to first page when searching
+    
+    // Check if search returns no results
+    if (filteredUsers.length === 0) {
+      setShowNoResultsDialog(true);
+    }
+  };
+
+  // Format CPF/CNPJ for display
+  const formatCpfCnpj = (cpf: string) => {
+    if (!cpf) return '';
+    const cleaned = cpf.replace(/[^\d]/g, '');
+    
+    if (cleaned.length === 11) {
+      // CPF format: 000.000.000-00
+      return cleaned.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+    } else if (cleaned.length === 14) {
+      // CNPJ format: 00.000.000/0000-00
+      return cleaned.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
+    }
+    return cpf;
+  };
+
+  // Format phone number for display
+  const formatPhone = (phone: string) => {
+    if (!phone) return '';
+    const cleaned = phone.replace(/[^\d]/g, '');
+    
+    if (cleaned.length === 11) {
+      // Format: (00) 00000-0000
+      return cleaned.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+    } else if (cleaned.length === 10) {
+      // Format: (00) 0000-0000
+      return cleaned.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
+    }
+    return phone;
   };
 
   return (
@@ -424,8 +475,8 @@ const Users = () => {
                         <SelectValue placeholder="Selecione" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="corpo-tecnico">Corpo Técnico</SelectItem>
-                        <SelectItem value="tecnico">Técnico</SelectItem>
+                        <SelectItem value="corpo técnico">Corpo Técnico</SelectItem>
+                        <SelectItem value="técnico">Técnico</SelectItem>
                         <SelectItem value="requerente">Requerente</SelectItem>
                       </SelectContent>
                     </Select>
@@ -473,9 +524,9 @@ const Users = () => {
                         <SelectValue placeholder="Selecione" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="Pendente">Pendente</SelectItem>
-                        <SelectItem value="Aprovado">Aprovado</SelectItem>
-                        <SelectItem value="Rejeitado">Rejeitado</SelectItem>
+                        <SelectItem value="pendente">Pendente</SelectItem>
+                        <SelectItem value="aprovado">Aprovado</SelectItem>
+                        <SelectItem value="rejeitado">Rejeitado</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -555,11 +606,11 @@ const Users = () => {
                           className="hover:bg-gray-50 transition-colors"
                         >
                           <TableCell className="font-medium text-gray-800">
-                            {user.cpf}
+                            {formatCpfCnpj(user.cpf)}
                           </TableCell>
                             <TableCell className="text-gray-600">{user.nome}</TableCell>
                           <TableCell className="text-gray-600">{user.email}</TableCell>
-                            <TableCell className="text-gray-600">{user.celular}</TableCell>
+                            <TableCell className="text-gray-600">{formatPhone(user.celular)}</TableCell>
                             <TableCell className="text-gray-600">{user.perfil}</TableCell>
                           <TableCell>
                             <Badge className="bg-emerald-600 hover:bg-emerald-600 text-white">
@@ -764,6 +815,23 @@ const Users = () => {
             </main>
           </SidebarInset>
         </div>
+
+        {/* No Results Dialog */}
+        <AlertDialog open={showNoResultsDialog} onOpenChange={setShowNoResultsDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Nenhum registro encontrado</AlertDialogTitle>
+              <AlertDialogDescription>
+                Nenhum registro foi encontrado para a busca realizada. Tente ajustar os filtros de busca.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogAction onClick={() => setShowNoResultsDialog(false)}>
+                Ok
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </TooltipProvider>
     </SidebarProvider>
   );
