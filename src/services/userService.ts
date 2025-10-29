@@ -1,11 +1,17 @@
 import { supabase } from '@/integrations/supabase/client';
+import { validateCPFOrCNPJ } from '@/utils/validators';
 
 export interface CreateUserData {
   nome: string;
-  email: string;
   cpf: string;
-  celular?: string;
   perfil: 'Corpo Técnico' | 'Requerente' | 'Técnico';
+  // Campos opcionais para outros perfis
+  email?: string;
+  celular?: string;
+  // Campos específicos para perfil Requerente
+  contato_medicao_cpf?: string;
+  contato_medicao_email?: string;
+  contato_medicao_celular?: string;
 }
 
 export interface UserApprovalStatus {
@@ -32,6 +38,32 @@ export async function createUserWithInvite(userData: CreateUserData): Promise<{
   user?: any;
 }> {
   try {
+    // Validar CPF/CNPJ antes de enviar
+    const cpfValidation = validateCPFOrCNPJ(userData.cpf);
+    if (!cpfValidation.valid) {
+      throw new Error(`CPF/CNPJ inválido`);
+    }
+
+    // Validar email apenas se fornecido (não obrigatório para Requerente)
+    if (userData.email && !userData.email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
+      throw new Error('Email inválido');
+    }
+
+    // A verificação de duplicidade será feita na Edge Function
+    // para evitar problemas de RLS
+
+    console.log('🚀 Enviando dados para Edge Function create-user:', {
+      nome: userData.nome,
+      email: userData.email,
+      cpf: userData.cpf,
+      celular: userData.celular,
+      perfil: userData.perfil,
+      contato_medicao_cpf: userData.contato_medicao_cpf,
+      contato_medicao_email: userData.contato_medicao_email,
+      contato_medicao_celular: userData.contato_medicao_celular,
+      baseUrl: window.location.origin,
+    });
+
     const { data, error } = await supabase.functions.invoke('create-user', {
       body: {
         nome: userData.nome,
@@ -39,11 +71,18 @@ export async function createUserWithInvite(userData: CreateUserData): Promise<{
         cpf: userData.cpf,
         celular: userData.celular,
         perfil: userData.perfil,
+        contato_medicao_cpf: userData.contato_medicao_cpf,
+        contato_medicao_email: userData.contato_medicao_email,
+        contato_medicao_celular: userData.contato_medicao_celular,
         baseUrl: window.location.origin,
       },
     });
 
+    console.log('📥 Resposta da Edge Function:', { data, error });
+
     if (error) {
+      console.error('❌ Erro na Edge Function:', error);
+      
       // Tratamento de erros específicos
       if (error.message?.includes('403') || error.message?.includes('Sem permissão')) {
         throw new Error('Você não tem permissão para criar usuários.');
@@ -54,6 +93,7 @@ export async function createUserWithInvite(userData: CreateUserData): Promise<{
       if (error.message?.includes('401') || error.message?.includes('autenticação')) {
         throw new Error('Sessão expirada. Faça login novamente.');
       }
+      console.error('❌ Erro não tratado:', error);
       throw new Error(error.message || 'Erro ao criar usuário');
     }
 

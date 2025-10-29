@@ -4,6 +4,8 @@ import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { createUserWithInvite } from '@/services/userService';
+import { validateCPFOrCNPJ, validateEmail, validatePhone, validateName } from '@/utils/validators';
+import { maskCPFOrCNPJ, maskPhone } from '@/utils/masks';
 import {
   Home as HomeIcon,
   FileText,
@@ -66,16 +68,25 @@ interface UserFormData {
   cpf: string;
   email: string;
   phone: string;
-  perfil: 'Corpo Técnico' | 'Requerente' | 'Técnico';
+  perfil: 'Corpo Técnico' | 'Requerente' | 'Técnico' | '';
+  // Campos específicos para perfil Requerente
+  contato_medicao_cpf?: string;
+  contato_medicao_email?: string;
+  contato_medicao_celular?: string;
 }
 
 // Validation schema
 const userSchema = z.object({
   name: z.string().min(3, 'Nome deve ter pelo menos 3 caracteres').max(255),
-  cpf: z.string().regex(/^\d{3}\.\d{3}\.\d{3}-\d{2}$|^\d{11}$/, 'CPF inválido'),
-  email: z.string().email('Email inválido'),
-  phone: z.string().regex(/^\(\d{2}\)\s?\d{4,5}-?\d{4}$|^\d{10,11}$/, 'Celular inválido').optional(),
-  perfil: z.enum(['Corpo Técnico', 'Requerente', 'Técnico']),
+  cpf: z.string().min(1, 'Campo obrigatório'),
+  email: z.string().email('Email inválido').optional().or(z.literal('')),
+  phone: z.string().optional(),
+  perfil: z.enum(['Corpo Técnico', 'Requerente', 'Técnico'], {
+    required_error: 'Campo obrigatório'
+  }),
+  contato_medicao_cpf: z.string().optional(),
+  contato_medicao_email: z.string().email('Email inválido').optional().or(z.literal('')),
+  contato_medicao_celular: z.string().optional(),
 });
 
 const CreateUser = () => {
@@ -88,10 +99,14 @@ const CreateUser = () => {
     cpf: '',
     email: '',
     phone: '',
-    perfil: 'Requerente',
+    perfil: '', // Inicialmente vazio
+    contato_medicao_cpf: '',
+    contato_medicao_email: '',
+    contato_medicao_celular: '',
   });
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [showFields, setShowFields] = useState(false);
 
   // Navigation items for the sidebar
   const navItems = [
@@ -130,24 +145,96 @@ const CreateUser = () => {
     setLoading(true);
 
     try {
-      const validatedData = userSchema.parse(formData);
+      // Validações customizadas
+      const customErrors: Record<string, string> = {};
 
-      const result = await createUserWithInvite({
-        nome: validatedData.name,
-        cpf: validatedData.cpf.replace(/\D/g, ''),
-        email: validatedData.email,
-        celular: validatedData.phone?.replace(/\D/g, ''),
-        perfil: validatedData.perfil,
-      });
+      // Validar perfil
+      if (!formData.perfil) {
+        customErrors.perfil = 'Campo obrigatório';
+      }
+
+      // Validar nome
+      if (!formData.name.trim()) {
+        customErrors.name = 'Campo obrigatório';
+      } else if (!validateName(formData.name)) {
+        customErrors.name = 'Nome deve conter pelo menos nome e sobrenome';
+      }
+
+      // Validar CPF/CNPJ
+      if (!formData.cpf.trim()) {
+        customErrors.cpf = 'Campo obrigatório';
+      } else {
+        const cpfValidation = validateCPFOrCNPJ(formData.cpf);
+        if (!cpfValidation.valid) {
+          customErrors.cpf = 'Campo inválido';
+        }
+      }
+
+      // Validar email (apenas para outros perfis)
+      if (formData.perfil !== 'Requerente') {
+        if (!formData.email.trim()) {
+          customErrors.email = 'Campo obrigatório';
+        } else if (!validateEmail(formData.email)) {
+          customErrors.email = 'Campo inválido';
+        }
+
+        // Validar celular se preenchido
+        if (formData.phone && !validatePhone(formData.phone)) {
+          customErrors.phone = 'Campo inválido';
+        }
+      }
+
+      // Validações específicas para perfil Requerente
+      if (formData.perfil === 'Requerente') {
+        // Validar contato de medição se preenchido
+        if (formData.contato_medicao_cpf && formData.contato_medicao_cpf.trim() && !validateCPFOrCNPJ(formData.contato_medicao_cpf).valid) {
+          customErrors.contato_medicao_cpf = 'Campo inválido';
+        }
+        if (formData.contato_medicao_email && formData.contato_medicao_email.trim() && !validateEmail(formData.contato_medicao_email)) {
+          customErrors.contato_medicao_email = 'Campo inválido';
+        }
+        if (formData.contato_medicao_celular && formData.contato_medicao_celular.trim() && !validatePhone(formData.contato_medicao_celular)) {
+          customErrors.contato_medicao_celular = 'Campo inválido';
+        }
+      }
+
+      if (Object.keys(customErrors).length > 0) {
+        setErrors(customErrors);
+        toast.error('Por favor, corrija os campos destacados.');
+        setLoading(false);
+        return;
+      }
+
+      // Preparar dados baseados no perfil
+      const userData: any = {
+        nome: formData.name,
+        cpf: formData.cpf.replace(/\D/g, ''),
+        perfil: formData.perfil,
+      };
+
+      // Adicionar email e celular apenas para outros perfis
+      if (formData.perfil !== 'Requerente') {
+        userData.email = formData.email;
+        userData.celular = formData.phone?.replace(/\D/g, '');
+      }
+
+      // Adicionar campos de contato de medição apenas para Requerente
+      if (formData.perfil === 'Requerente') {
+        userData.contato_medicao_cpf = formData.contato_medicao_cpf?.replace(/\D/g, '');
+        userData.contato_medicao_email = formData.contato_medicao_email;
+        userData.contato_medicao_celular = formData.contato_medicao_celular?.replace(/\D/g, '');
+      }
+
+      const result = await createUserWithInvite(userData);
 
       // Mensagem condicional
       if (result.requiresApproval) {
-        toast.success(
-          `Usuário Corpo Técnico criado! Email de convite enviado para ${validatedData.email}`,
-          { duration: 5000 }
-        );
+        const emailMessage = formData.perfil === 'Requerente' 
+          ? 'Usuário Requerente criado!' 
+          : `Usuário ${formData.perfil} criado! Email de convite enviado para ${formData.email}`;
+        toast.success(emailMessage, { duration: 5000 });
       } else {
-        toast.success(`Usuário ${validatedData.perfil} criado e aprovado automaticamente!`);
+        toast.success(`Usuário ${formData.perfil} criado e aprovado automaticamente!`);
       }
       
       navigate('/users');
@@ -177,6 +264,38 @@ const CreateUser = () => {
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
     }
+  };
+
+  // Handle profile change
+  const handleProfileChange = (value: string) => {
+    if (value) {
+      updateFormField('perfil', value as 'Corpo Técnico' | 'Requerente' | 'Técnico');
+      setShowFields(true);
+    } else {
+      updateFormField('perfil', '');
+      setShowFields(false);
+    }
+  };
+
+  // Apply masks to input values
+  const handleCPFChange = (value: string) => {
+    const maskedValue = maskCPFOrCNPJ(value);
+    updateFormField('cpf', maskedValue);
+  };
+
+  const handlePhoneChange = (value: string) => {
+    const maskedValue = maskPhone(value);
+    updateFormField('phone', maskedValue);
+  };
+
+  const handleContatoCPFChange = (value: string) => {
+    const maskedValue = maskCPFOrCNPJ(value);
+    updateFormField('contato_medicao_cpf', maskedValue);
+  };
+
+  const handleContatoPhoneChange = (value: string) => {
+    const maskedValue = maskPhone(value);
+    updateFormField('contato_medicao_celular', maskedValue);
   };
 
   return (
@@ -412,8 +531,8 @@ const CreateUser = () => {
                         Perfil <span className="text-red-500">*</span>
                       </Label>
                       <Select
-                        value={formData.perfil}
-                        onValueChange={(value) => updateFormField('perfil', value as UserFormData['perfil'])}
+                        value={formData.perfil || undefined}
+                        onValueChange={handleProfileChange}
                       >
                         <SelectTrigger className="h-11 border-gray-300 focus:border-emerald-500">
                           <SelectValue placeholder="Selecione o perfil" />
@@ -444,86 +563,176 @@ const CreateUser = () => {
                       )}
                     </div>
 
-                    {/* Nome Input */}
-                    <div className="space-y-2">
-                      <Label htmlFor="name" className="text-sm font-medium text-gray-700">
-                        Nome Completo <span className="text-red-500">*</span>
-                      </Label>
-                      <Input
-                        id="name"
-                        type="text"
-                        placeholder="Digite o nome completo"
-                        value={formData.name}
-                        onChange={(e) => updateFormField('name', e.target.value)}
-                        className={`h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500 ${
-                          errors.name ? 'border-red-500' : ''
-                        }`}
-                      />
-                      {errors.name && <p className="text-xs text-red-500">{errors.name}</p>}
-                    </div>
+                    {/* Campos condicionais baseados no perfil */}
+                    {showFields && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        transition={{ duration: 0.3 }}
+                        className="space-y-6"
+                      >
 
-                    {/* CPF Input */}
-                    <div className="space-y-2">
-                      <Label htmlFor="cpf" className="text-sm font-medium text-gray-700">
-                        CPF <span className="text-red-500">*</span>
-                      </Label>
-                      <Input
-                        id="cpf"
-                        type="text"
-                        placeholder="000.000.000-00"
-                        value={formData.cpf}
-                        onChange={(e) => updateFormField('cpf', e.target.value)}
-                        className={`h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500 ${
-                          errors.cpf ? 'border-red-500' : ''
-                        }`}
-                        maxLength={14}
-                      />
-                      {errors.cpf && <p className="text-xs text-red-500">{errors.cpf}</p>}
-                      <p className="text-xs text-gray-500 mt-1">
-                        Informe apenas números, a formatação será automática
-                      </p>
-                    </div>
+                        {/* Nome Input */}
+                        <div className="space-y-2">
+                          <Label htmlFor="name" className="text-sm font-medium text-gray-700">
+                            Nome Completo <span className="text-red-500">*</span>
+                          </Label>
+                          <Input
+                            id="name"
+                            type="text"
+                            placeholder="Digite o nome completo"
+                            value={formData.name}
+                            onChange={(e) => updateFormField('name', e.target.value)}
+                            className={`h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500 ${
+                              errors.name ? 'border-red-500' : ''
+                            }`}
+                          />
+                          {errors.name && <p className="text-xs text-red-500">{errors.name}</p>}
+                        </div>
 
-                    {/* Email Input */}
-                    <div className="space-y-2">
-                      <Label htmlFor="email" className="text-sm font-medium text-gray-700">
-                        Email <span className="text-red-500">*</span>
-                      </Label>
-                      <Input
-                        id="email"
-                        type="email"
-                        placeholder="exemplo@exemplo.com"
-                        value={formData.email}
-                        onChange={(e) => updateFormField('email', e.target.value)}
-                        className={`h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500 ${
-                          errors.email ? 'border-red-500' : ''
-                        }`}
-                      />
-                      {errors.email && <p className="text-xs text-red-500">{errors.email}</p>}
-                      <p className="text-xs text-gray-500 mt-1">
-                        Este email será usado para login e notificações
-                      </p>
-                    </div>
+                        {/* CPF/CNPJ Input */}
+                        <div className="space-y-2">
+                          <Label htmlFor="cpf" className="text-sm font-medium text-gray-700">
+                            CPF ou CNPJ <span className="text-red-500">*</span>
+                          </Label>
+                          <Input
+                            id="cpf"
+                            type="text"
+                            placeholder="000.000.000-00 ou 00.000.000/0000-00"
+                            value={formData.cpf}
+                            onChange={(e) => handleCPFChange(e.target.value)}
+                            className={`h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500 ${
+                              errors.cpf ? 'border-red-500' : ''
+                            }`}
+                            maxLength={18}
+                          />
+                          {errors.cpf && <p className="text-xs text-red-500">{errors.cpf}</p>}
+                          <p className="text-xs text-gray-500 mt-1">
+                            Informe apenas números, a formatação será automática
+                          </p>
+                        </div>
 
-                    {/* Celular Input */}
-                    <div className="space-y-2">
-                      <Label htmlFor="phone" className="text-sm font-medium text-gray-700">
-                        Celular
-                      </Label>
-                      <Input
-                        id="phone"
-                        type="text"
-                        placeholder="(00) 00000-0000"
-                        value={formData.phone}
-                        onChange={(e) => updateFormField('phone', e.target.value)}
-                        className={`h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500 ${
-                          errors.phone ? 'border-red-500' : ''
-                        }`}
-                        maxLength={15}
-                      />
-                      {errors.phone && <p className="text-xs text-red-500">{errors.phone}</p>}
-                      <p className="text-xs text-gray-500 mt-1">Campo opcional</p>
-                    </div>
+                        {/* Email Input - Apenas para outros perfis */}
+                        {formData.perfil !== 'Requerente' && (
+                          <div className="space-y-2">
+                            <Label htmlFor="email" className="text-sm font-medium text-gray-700">
+                              Email <span className="text-red-500">*</span>
+                            </Label>
+                            <Input
+                              id="email"
+                              type="email"
+                              placeholder="exemplo@exemplo.com"
+                              value={formData.email}
+                              onChange={(e) => updateFormField('email', e.target.value)}
+                              className={`h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500 ${
+                                errors.email ? 'border-red-500' : ''
+                              }`}
+                            />
+                            {errors.email && <p className="text-xs text-red-500">{errors.email}</p>}
+                            <p className="text-xs text-gray-500 mt-1">
+                              Este email será usado para login e notificações
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Celular Input - Apenas para outros perfis */}
+                        {formData.perfil !== 'Requerente' && (
+                          <div className="space-y-2">
+                            <Label htmlFor="phone" className="text-sm font-medium text-gray-700">
+                              Celular
+                            </Label>
+                            <Input
+                              id="phone"
+                              type="text"
+                              placeholder="(00) 00000-0000"
+                              value={formData.phone}
+                              onChange={(e) => handlePhoneChange(e.target.value)}
+                              className={`h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500 ${
+                                errors.phone ? 'border-red-500' : ''
+                              }`}
+                              maxLength={15}
+                            />
+                            {errors.phone && <p className="text-xs text-red-500">{errors.phone}</p>}
+                            <p className="text-xs text-gray-500 mt-1">Campo opcional</p>
+                          </div>
+                        )}
+
+                        {/* Campos específicos para perfil Requerente */}
+                        {formData.perfil === 'Requerente' && (
+                          <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.3, delay: 0.1 }}
+                            className="space-y-6 border-t border-gray-200 pt-6"
+                          >
+                            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                              <h3 className="text-lg font-semibold text-amber-800 mb-2">
+                                Contato para Medição
+                              </h3>
+                              <p className="text-sm text-amber-700">
+                                Os campos abaixo são opcionais e referem-se ao contato responsável pela medição de hidrômetro e horímetro.
+                              </p>
+                            </div>
+
+                            {/* CPF do Contato */}
+                            <div className="space-y-2">
+                              <Label htmlFor="contato_medicao_cpf" className="text-sm font-medium text-gray-700">
+                                CPF do Contato
+                              </Label>
+                              <Input
+                                id="contato_medicao_cpf"
+                                type="text"
+                                placeholder="000.000.000-00"
+                                value={formData.contato_medicao_cpf || ''}
+                                onChange={(e) => handleContatoCPFChange(e.target.value)}
+                                className={`h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500 ${
+                                  errors.contato_medicao_cpf ? 'border-red-500' : ''
+                                }`}
+                                maxLength={14}
+                              />
+                              {errors.contato_medicao_cpf && <p className="text-xs text-red-500">{errors.contato_medicao_cpf}</p>}
+                            </div>
+
+                            {/* Email do Contato */}
+                            <div className="space-y-2">
+                              <Label htmlFor="contato_medicao_email" className="text-sm font-medium text-gray-700">
+                                Email do Contato
+                              </Label>
+                              <Input
+                                id="contato_medicao_email"
+                                type="email"
+                                placeholder="exemplo@exemplo.com"
+                                value={formData.contato_medicao_email || ''}
+                                onChange={(e) => updateFormField('contato_medicao_email', e.target.value)}
+                                className={`h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500 ${
+                                  errors.contato_medicao_email ? 'border-red-500' : ''
+                                }`}
+                              />
+                              {errors.contato_medicao_email && <p className="text-xs text-red-500">{errors.contato_medicao_email}</p>}
+                            </div>
+
+                            {/* Celular do Contato */}
+                            <div className="space-y-2">
+                              <Label htmlFor="contato_medicao_celular" className="text-sm font-medium text-gray-700">
+                                Celular do Contato
+                              </Label>
+                              <Input
+                                id="contato_medicao_celular"
+                                type="text"
+                                placeholder="(00) 00000-0000"
+                                value={formData.contato_medicao_celular || ''}
+                                onChange={(e) => handleContatoPhoneChange(e.target.value)}
+                                className={`h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500 ${
+                                  errors.contato_medicao_celular ? 'border-red-500' : ''
+                                }`}
+                                maxLength={15}
+                              />
+                              {errors.contato_medicao_celular && <p className="text-xs text-red-500">{errors.contato_medicao_celular}</p>}
+                            </div>
+                          </motion.div>
+                        )}
+                      </motion.div>
+                    )}
                   </div>
 
                   {/* Action Buttons */}

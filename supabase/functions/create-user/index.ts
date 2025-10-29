@@ -63,11 +63,29 @@ serve(async (req) => {
     }
 
     // 4. Validar payload
-    const { nome, email, cpf, celular, perfil, baseUrl } = await req.json();
+    const { 
+      nome, 
+      email, 
+      cpf, 
+      celular, 
+      perfil, 
+      baseUrl,
+      contato_medicao_cpf,
+      contato_medicao_email,
+      contato_medicao_celular
+    } = await req.json();
 
-    if (!nome || !email || !cpf || !perfil) {
+    if (!nome || !cpf || !perfil) {
       return new Response(
         JSON.stringify({ error: 'Campos obrigatórios faltando' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Email é obrigatório apenas para perfis que não sejam Requerente
+    if (perfil !== 'Requerente' && !email) {
+      return new Response(
+        JSON.stringify({ error: 'Email é obrigatório para este perfil' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -80,25 +98,55 @@ serve(async (req) => {
     }
 
     // 5. Verificar duplicidade
-    const { data: existingUser } = await supabase
+    let duplicateQuery = supabase
       .from('usuarios')
       .select('id')
-      .or(`cpf.eq.${cpf},email.eq.${email}`)
-      .maybeSingle();
+      .eq('cpf', cpf);
+
+    if (email) {
+      duplicateQuery = duplicateQuery.or(`cpf.eq.${cpf},email.eq.${email}`);
+    }
+
+    const { data: existingUser } = await duplicateQuery.maybeSingle();
 
     if (existingUser) {
+      const errorMessage = email 
+        ? 'CPF ou email já cadastrado no sistema'
+        : 'CPF já cadastrado no sistema';
       return new Response(
-        JSON.stringify({ error: 'CPF ou email já cadastrado no sistema' }),
+        JSON.stringify({ error: errorMessage }),
         { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     // 6. Criar usuário no Auth
-    const { data: authData, error: createError } = await supabase.auth.admin.createUser({
-      email,
-      email_confirm: true,
-      user_metadata: { nome, cpf, celular, perfil, source: 'admin' }
-    });
+    let authData: any = null;
+    let createError: any = null;
+
+    if (email) {
+      // Criar usuário com email
+      const result = await supabase.auth.admin.createUser({
+        email,
+        email_confirm: true,
+        user_metadata: { nome, cpf, celular, perfil, source: 'admin' }
+      });
+      authData = result.data;
+      createError = result.error;
+    } else if (perfil === 'Requerente') {
+      // Para perfil Requerente sem email, não criar usuário Auth
+      // Criar um ID temporário para referência
+      authData = {
+        user: {
+          id: `temp_${cpf}_${Date.now()}`
+        }
+      };
+    } else {
+      // Outros perfis sem email - erro
+      return new Response(
+        JSON.stringify({ error: 'Email é obrigatório para este perfil' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     if (createError || !authData.user) {
       console.error('Create auth user error:', createError);
@@ -128,32 +176,47 @@ serve(async (req) => {
     }
 
     // 8. Inserir em usuarios
+    const insertData: any = {
+      auth_user_id: authData.user.id,
+      nome,
+      cpf,
+      celular: celular || null,
+      perfil,
+      status_aprovacao: 'Pendente', // Todos os perfis iniciam como Pendente
+      token_senha,
+      token_expiracao,
+    };
+
+    // Adicionar email apenas se fornecido
+    if (email) {
+      insertData.email = email;
+    }
+
+    // Adicionar campos de contato de medição apenas para Requerente
+    if (perfil === 'Requerente') {
+      insertData.contato_medicao_cpf = contato_medicao_cpf || null;
+      insertData.contato_medicao_email = contato_medicao_email || null;
+      insertData.contato_medicao_celular = contato_medicao_celular || null;
+    }
+
     const { error: insertError } = await supabase
       .from('usuarios')
-      .insert({
-        auth_user_id: authData.user.id,
-        nome,
-        email,
-        cpf,
-        celular: celular || null,
-        perfil,
-        status_aprovacao: 'Pendente', // Todos os perfis iniciam como Pendente
-        token_senha,
-        token_expiracao,
-      });
+      .insert(insertData);
 
     if (insertError) {
       console.error('Insert usuarios error:', insertError);
-      // Limpar auth user se falhar
-      await supabase.auth.admin.deleteUser(authData.user.id);
+      // Limpar auth user se falhar (apenas se foi criado)
+      if (email) {
+        await supabase.auth.admin.deleteUser(authData.user.id);
+      }
       return new Response(
         JSON.stringify({ error: `Erro ao criar registro: ${insertError.message}` }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // 9. Enviar email via Supabase Auth se for Corpo Técnico
-    if (isCorpoTecnico && baseUrl) {
+    // 9. Enviar email via Supabase Auth se for Corpo Técnico e tiver email
+    if (isCorpoTecnico && baseUrl && email) {
       try {
         const { error: resetError } = await supabase.auth.resetPasswordForEmail(
           email,
@@ -176,10 +239,15 @@ serve(async (req) => {
     const response: any = {
       success: true,
       requiresApproval: true, // Todos os perfis agora precisam de aprovação
-      user: { nome, email, perfil },
+      user: { nome, perfil },
     };
 
-    if (isCorpoTecnico && baseUrl) {
+    // Adicionar email na resposta apenas se fornecido
+    if (email) {
+      response.user.email = email;
+    }
+
+    if (isCorpoTecnico && baseUrl && email) {
       response.inviteLink = `${baseUrl}/set-password?token=${token_senha}&email=${encodeURIComponent(email)}`;
     }
 
