@@ -14,6 +14,8 @@ import Dashboard from "./pages/Dashboard";
 import Home from "./pages/Home";
 import Users from "./pages/Users";
 import CreateUser from "./pages/CreateUser";
+import EditUser from "./pages/EditUser";
+import ViewUser from "./pages/ViewUser";
 import Licenses from "./pages/Licenses";
 import CreateLicense from "./pages/CreateLicense";
 import NotFound from "./pages/NotFound";
@@ -63,7 +65,17 @@ const App = () => (
               <CreateUser />
             </ProtectedRoute>
           } />
-          
+          <Route path="/edit-user/:id" element={
+            <ProtectedRoute>
+              <EditUser />
+            </ProtectedRoute>
+          } />
+          <Route path="/view-user/:id" element={
+            <ProtectedRoute>
+              <ViewUser />
+            </ProtectedRoute>
+          } />
+
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

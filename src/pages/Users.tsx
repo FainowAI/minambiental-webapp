@@ -688,7 +688,15 @@ const Users = () => {
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                                    onClick={() => {
+                                      // Apenas usuários Corpo Técnico e Técnico podem ser visualizados
+                                      if (user.perfil === 'Corpo Técnico' || user.perfil === 'Técnico') {
+                                        navigate(`/view-user/${user.id}`);
+                                      } else {
+                                        toast.info('Visualização disponível apenas para perfis Corpo Técnico e Técnico');
+                                      }
+                                    }}
+                                    className="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 hover:scale-110 transition-all duration-200"
                                   >
                                     <Eye className="h-4 w-4" />
                                   </Button>
@@ -703,7 +711,8 @@ const Users = () => {
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                                    onClick={() => navigate(`/edit-user/${user.id}`)}
+                                    className="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 hover:scale-110 transition-all duration-200"
                                   >
                                     <Edit className="h-4 w-4" />
                                   </Button>

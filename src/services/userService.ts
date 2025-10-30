@@ -223,7 +223,7 @@ export async function validatePasswordToken(token: string, email: string) {
 export async function clearPasswordToken(userId: string): Promise<void> {
   const { error } = await supabase
     .from('usuarios')
-    .update({ 
+    .update({
       token_senha: null,
       token_expiracao: null
     })
@@ -231,5 +231,125 @@ export async function clearPasswordToken(userId: string): Promise<void> {
 
   if (error) {
     throw new Error(`Erro ao limpar token: ${error.message}`);
+  }
+}
+
+/**
+ * Get user by ID
+ */
+export async function getUserById(userId: string) {
+  const { data, error } = await supabase
+    .from('usuarios')
+    .select('*')
+    .eq('id', userId)
+    .single();
+
+  if (error) {
+    throw new Error(`Erro ao buscar usuário: ${error.message}`);
+  }
+
+  return data;
+}
+
+/**
+ * Update user data
+ */
+export interface UpdateUserData {
+  nome: string;
+  cpf: string;
+  email?: string;
+  celular?: string;
+  perfil: 'Corpo Técnico' | 'Requerente' | 'Técnico';
+}
+
+export async function updateUser(userId: string, userData: UpdateUserData): Promise<void> {
+  try {
+    // Validar CPF/CNPJ antes de enviar
+    const cpfValidation = validateCPFOrCNPJ(userData.cpf);
+    if (!cpfValidation.valid) {
+      throw new Error(`CPF/CNPJ inválido`);
+    }
+
+    // Remover caracteres especiais do CPF e celular
+    const cleanedCpf = userData.cpf.replace(/\D/g, '');
+    const cleanedCelular = userData.celular?.replace(/\D/g, '');
+
+    // Verificar se CPF já existe (exceto para o próprio usuário)
+    const { data: existingUser, error: checkError } = await supabase
+      .from('usuarios')
+      .select('id')
+      .eq('cpf', cleanedCpf)
+      .neq('id', userId)
+      .single();
+
+    if (existingUser) {
+      throw new Error('CPF já cadastrado no sistema');
+    }
+
+    // Preparar dados para atualização
+    const updateData: any = {
+      nome: userData.nome,
+      cpf: cleanedCpf,
+      perfil: userData.perfil,
+      updated_at: new Date().toISOString()
+    };
+
+    // Adicionar email e celular apenas se o perfil não for Requerente
+    if (userData.perfil !== 'Requerente') {
+      updateData.email = userData.email;
+      updateData.celular = cleanedCelular;
+    }
+
+    const { error } = await supabase
+      .from('usuarios')
+      .update(updateData)
+      .eq('id', userId);
+
+    if (error) {
+      throw new Error(`Erro ao atualizar usuário: ${error.message}`);
+    }
+  } catch (error) {
+    console.error('Error updating user:', error);
+    throw error;
+  }
+}
+
+/**
+ * Check if a Requerente has active contracts
+ */
+export async function hasActiveContracts(userId: string): Promise<boolean> {
+  // Buscar contratos ativos vinculados ao usuário
+  const { data, error } = await supabase
+    .from('contratos')
+    .select('id')
+    .eq('requerente_id', userId)
+    .eq('status', 'Ativo')
+    .limit(1);
+
+  if (error) {
+    console.error('Error checking active contracts:', error);
+    // Em caso de erro, retornamos true para prevenir inativação acidental
+    return true;
+  }
+
+  return data && data.length > 0;
+}
+
+/**
+ * Toggle user status (activate/deactivate)
+ */
+export async function toggleUserStatus(userId: string, currentStatus: string): Promise<void> {
+  const newStatus = currentStatus === 'Ativo' ? 'Inativo' : 'Ativo';
+
+  const { error } = await supabase
+    .from('usuarios')
+    .update({
+      status: newStatus,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', userId);
+
+  if (error) {
+    throw new Error(`Erro ao atualizar status do usuário: ${error.message}`);
   }
 }
