@@ -149,50 +149,88 @@ const CreateLicense = () => {
   };
 
   const handleSave = async () => {
+    // Validações básicas
     const newErrors: Record<string, string> = {};
-    // Required checks (CA02)
-    const reqFields: (keyof LicenseFormData)[] = [
-      'licenseNumber','cnpj','requesterName','act','actObject','interferenceType','useFinality','municipality','state','planningUnit','aquiferSystem','latitude','longitude','annualVolume','validityStart','validityEnd','priority'
-    ];
-    reqFields.forEach((f) => { if (!formData[f]) newErrors[f] = 'Campo Obrigatório'; });
+    if (!formData.licenseNumber) newErrors.licenseNumber = 'Campo obrigatório';
+    if (!formData.cnpj || !validateCNPJ(formData.cnpj)) newErrors.cnpj = 'CNPJ inválido';
+    if (!formData.act) newErrors.act = 'Campo obrigatório';
+    if (!formData.actObject) newErrors.actObject = 'Campo obrigatório';
+    if (!formData.municipality) newErrors.municipality = 'Campo obrigatório';
+    if (!formData.validityStart) newErrors.validityStart = 'Campo obrigatório';
+    if (!formData.validityEnd) newErrors.validityEnd = 'Campo obrigatório';
+    if (!formData.pdfFile) newErrors.pdfFile = 'Arquivo PDF obrigatório';
 
-    // CNPJ (CA03)
-    if (formData.cnpj && !validateCNPJ(formData.cnpj)) {
-      newErrors.cnpj = 'dos os municípios do Estado de Mato Grosso do Sul';
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      toast({
+        title: 'Campos obrigatórios',
+        description: 'Preencha todos os campos marcados com *',
+        variant: 'destructive'
+      });
+      return;
     }
 
-    // DMS (CA07)
-    if (formData.latitude && !validateDMS(formData.latitude)) newErrors.latitude = 'Campo Obrigatório';
-    if (formData.longitude && !validateDMS(formData.longitude)) newErrors.longitude = 'Campo Obrigatório';
-
-    // PDF (CA10)
-    if (!validatePdfFile(formData.pdfFile)) newErrors.pdfFile = 'Formato inválido';
-
-    setErrors(newErrors);
-    if (Object.keys(newErrors).length > 0) return;
-
-    // Persistência
-    if (!formData.pdfFile) return;
-    await createLicense({
-      numeroLicenca: formData.licenseNumber,
-      cnpj: formData.cnpj,
-      tipoAto: formData.act,
-      objetoAto: formData.actObject,
-      tipoPontoInterferencia: formData.interferenceType,
-      finalidadeUso: formData.useFinality,
-      municipio: formData.municipality,
-      estado: formData.state,
-      unidadePlanejamento: formData.planningUnit,
-      sistemaAquifero: formData.aquiferSystem,
-      latitudeDms: formData.latitude,
-      longitudeDms: formData.longitude,
-      volumeAnual: formData.annualVolume,
-      dataInicio: formData.validityStart,
-      dataFim: formData.validityEnd,
-      prioridadeUi: formData.priority as any,
-      pdfFile: formData.pdfFile,
+    // Estado de loading
+    const loadingToastId = toast({
+      title: 'Salvando licença...',
+      description: 'Enviando dados e arquivo PDF. Aguarde.',
+      duration: Infinity,
     });
-    navigate('/licenses');
+
+    try {
+      const payload: any = {
+        numeroLicenca: formData.licenseNumber,
+        cnpj: formData.cnpj,
+        tipoAto: formData.act,
+        objetoAto: formData.actObject,
+        tipoPontoInterferencia: formData.interferenceType,
+        finalidadeUso: formData.useFinality,
+        municipio: formData.municipality,
+        estado: formData.state,
+        unidadePlanejamento: formData.planningUnit,
+        sistemaAquifero: formData.aquiferSystem,
+        latitudeDms: formData.latitude,
+        longitudeDms: formData.longitude,
+        volumeAnual: formData.annualVolume,
+        dataInicio: formData.validityStart,
+        dataFim: formData.validityEnd,
+        prioridadeUi: formData.priority as 'urgente' | 'alta' | 'media' | 'baixa',
+        pdfFile: formData.pdfFile,
+      };
+
+      await createLicense(payload);
+
+      // Sucesso
+      toast({
+        title: 'Licença cadastrada com sucesso!',
+        description: 'A licença foi salva e o PDF foi enviado.',
+      });
+
+      // Redirecionar após 1.5s
+      setTimeout(() => {
+        navigate('/licenses');
+      }, 1500);
+
+    } catch (error: any) {
+      // Tratamento de erros específicos
+      let errorMessage = 'Ocorreu um erro ao salvar a licença. Tente novamente.';
+      
+      if (error.message?.includes('Requerente não encontrado')) {
+        errorMessage = 'CNPJ não encontrado. Cadastre o requerente antes de criar a licença.';
+      } else if (error.message?.includes('upload')) {
+        errorMessage = 'Erro ao fazer upload do PDF. Verifique o arquivo e tente novamente.';
+      } else if (error.message?.includes('criar licença')) {
+        errorMessage = 'Erro ao salvar os dados da licença no banco de dados.';
+      }
+
+      toast({
+        title: 'Erro ao salvar',
+        description: errorMessage,
+        variant: 'destructive',
+      });
+
+      console.error('Error saving license:', error);
+    }
   };
 
   const updateFormField = (field: keyof LicenseFormData, value: string | File | null) => {
