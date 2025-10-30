@@ -1,9 +1,8 @@
-import { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
-import { z } from 'zod';
-import { createUserWithInvite } from '@/services/userService';
+import { getUserById, updateUser } from '@/services/userService';
 import { validateCPFOrCNPJ, validateEmail, validatePhone, validateName } from '@/utils/validators';
 import { maskCPFOrCNPJ, maskPhone } from '@/utils/masks';
 import {
@@ -69,29 +68,12 @@ interface UserFormData {
   email: string;
   phone: string;
   perfil: 'Corpo Técnico' | 'Requerente' | 'Técnico' | '';
-  // Campos específicos para perfil Requerente
-  contato_medicao_cpf?: string;
-  contato_medicao_email?: string;
-  contato_medicao_celular?: string;
 }
 
-// Validation schema
-const userSchema = z.object({
-  name: z.string().min(3, 'Nome deve ter pelo menos 3 caracteres').max(255),
-  cpf: z.string().min(1, 'Campo obrigatório'),
-  email: z.string().email('Email inválido').optional().or(z.literal('')),
-  phone: z.string().optional(),
-  perfil: z.enum(['Corpo Técnico', 'Requerente', 'Técnico'], {
-    required_error: 'Campo obrigatório'
-  }),
-  contato_medicao_cpf: z.string().optional(),
-  contato_medicao_email: z.string().email('Email inválido').optional().or(z.literal('')),
-  contato_medicao_celular: z.string().optional(),
-});
-
-const CreateUser = () => {
+const EditUser = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { id } = useParams<{ id: string }>();
 
   // Form state management
   const [formData, setFormData] = useState<UserFormData>({
@@ -99,14 +81,11 @@ const CreateUser = () => {
     cpf: '',
     email: '',
     phone: '',
-    perfil: '', // Inicialmente vazio
-    contato_medicao_cpf: '',
-    contato_medicao_email: '',
-    contato_medicao_celular: '',
+    perfil: '',
   });
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [showFields, setShowFields] = useState(false);
 
   // Navigation items for the sidebar
   const navItems = [
@@ -126,12 +105,11 @@ const CreateUser = () => {
       title: 'Usuários',
       icon: Users,
       url: '/users',
-      isActive: location.pathname === '/users' || location.pathname === '/create-user',
+      isActive: location.pathname === '/users' || location.pathname.startsWith('/edit-user'),
     },
   ];
 
   const handleLogout = () => {
-    // Add logout logic here
     console.log('Logout clicked');
     navigate('/');
   };
@@ -140,9 +118,41 @@ const CreateUser = () => {
     navigate('/users');
   };
 
+  // Load user data
+  useEffect(() => {
+    const loadUser = async () => {
+      if (!id) {
+        toast.error('ID do usuário não fornecido');
+        navigate('/users');
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const userData = await getUserById(id);
+
+        setFormData({
+          name: userData.nome || '',
+          cpf: maskCPFOrCNPJ(userData.cpf || ''),
+          email: userData.email || '',
+          phone: maskPhone(userData.celular || ''),
+          perfil: userData.perfil || '',
+        });
+      } catch (error) {
+        toast.error('Erro ao carregar dados do usuário');
+        console.error('Error loading user:', error);
+        navigate('/users');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadUser();
+  }, [id, navigate]);
+
   const handleSave = async () => {
     setErrors({});
-    setLoading(true);
+    setSaving(true);
 
     try {
       // Validações customizadas
@@ -170,7 +180,7 @@ const CreateUser = () => {
         }
       }
 
-      // Validar email (apenas para outros perfis)
+      // Validar email e celular (apenas para perfis Corpo Técnico e Técnico)
       if (formData.perfil !== 'Requerente') {
         if (!formData.email.trim()) {
           customErrors.email = 'Campo obrigatório';
@@ -184,77 +194,44 @@ const CreateUser = () => {
         }
       }
 
-      // Validações específicas para perfil Requerente
-      if (formData.perfil === 'Requerente') {
-        // Validar contato de medição se preenchido
-        if (formData.contato_medicao_cpf && formData.contato_medicao_cpf.trim() && !validateCPFOrCNPJ(formData.contato_medicao_cpf).valid) {
-          customErrors.contato_medicao_cpf = 'Campo inválido';
-        }
-        if (formData.contato_medicao_email && formData.contato_medicao_email.trim() && !validateEmail(formData.contato_medicao_email)) {
-          customErrors.contato_medicao_email = 'Campo inválido';
-        }
-        if (formData.contato_medicao_celular && formData.contato_medicao_celular.trim() && !validatePhone(formData.contato_medicao_celular)) {
-          customErrors.contato_medicao_celular = 'Campo inválido';
-        }
-      }
-
       if (Object.keys(customErrors).length > 0) {
         setErrors(customErrors);
         toast.error('Por favor, corrija os campos destacados.');
-        setLoading(false);
+        setSaving(false);
         return;
       }
 
-      // Preparar dados baseados no perfil
+      // Preparar dados para atualização
       const userData: any = {
         nome: formData.name,
-        cpf: formData.cpf.replace(/\D/g, ''),
+        cpf: formData.cpf,
         perfil: formData.perfil,
       };
 
       // Adicionar email e celular apenas para outros perfis
       if (formData.perfil !== 'Requerente') {
         userData.email = formData.email;
-        userData.celular = formData.phone?.replace(/\D/g, '');
+        userData.celular = formData.phone;
       }
 
-      // Adicionar campos de contato de medição apenas para Requerente
-      if (formData.perfil === 'Requerente') {
-        userData.contato_medicao_cpf = formData.contato_medicao_cpf?.replace(/\D/g, '');
-        userData.contato_medicao_email = formData.contato_medicao_email;
-        userData.contato_medicao_celular = formData.contato_medicao_celular?.replace(/\D/g, '');
-      }
+      await updateUser(id!, userData);
 
-      const result = await createUserWithInvite(userData);
-
-      // Mensagem condicional
-      if (result.requiresApproval) {
-        const emailMessage = formData.perfil === 'Requerente' 
-          ? 'Usuário Requerente criado!' 
-          : `Usuário ${formData.perfil} criado! Email de convite enviado para ${formData.email}`;
-        toast.success(emailMessage, { duration: 5000 });
-      } else {
-        toast.success(`Usuário ${formData.perfil} criado e aprovado automaticamente!`);
-      }
-      
+      toast.success('Usuário atualizado com sucesso');
       navigate('/users');
 
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        const fieldErrors: Record<string, string> = {};
-        error.errors.forEach((err) => {
-          if (err.path[0]) {
-            fieldErrors[err.path[0] as string] = err.message;
-          }
-        });
-        setErrors(fieldErrors);
-
-        toast.error('Por favor, corrija os campos destacados.');
+      if (error instanceof Error) {
+        if (error.message.includes('CPF já cadastrado')) {
+          setErrors({ cpf: 'CPF já cadastrado no sistema' });
+          toast.error('CPF já cadastrado no sistema');
+        } else {
+          toast.error(error.message);
+        }
       } else {
-        toast.error(error instanceof Error ? error.message : 'Erro inesperado.');
+        toast.error('Erro ao atualizar usuário');
       }
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
@@ -263,17 +240,6 @@ const CreateUser = () => {
     setFormData((prev) => ({ ...prev, [field]: value }));
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
-    }
-  };
-
-  // Handle profile change
-  const handleProfileChange = (value: string) => {
-    if (value) {
-      updateFormField('perfil', value as 'Corpo Técnico' | 'Requerente' | 'Técnico');
-      setShowFields(true);
-    } else {
-      updateFormField('perfil', '');
-      setShowFields(false);
     }
   };
 
@@ -288,15 +254,18 @@ const CreateUser = () => {
     updateFormField('phone', maskedValue);
   };
 
-  const handleContatoCPFChange = (value: string) => {
-    const maskedValue = maskCPFOrCNPJ(value);
-    updateFormField('contato_medicao_cpf', maskedValue);
-  };
-
-  const handleContatoPhoneChange = (value: string) => {
-    const maskedValue = maskPhone(value);
-    updateFormField('contato_medicao_celular', maskedValue);
-  };
+  if (loading) {
+    return (
+      <SidebarProvider>
+        <div className="flex min-h-screen w-full items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-emerald-600" />
+            <p className="text-gray-600">Carregando dados do usuário...</p>
+          </div>
+        </div>
+      </SidebarProvider>
+    );
+  }
 
   return (
     <SidebarProvider>
@@ -436,13 +405,13 @@ const CreateUser = () => {
                   </BreadcrumbItem>
                   <BreadcrumbSeparator />
                   <BreadcrumbItem>
-                    <BreadcrumbPage>Cadastrar Usuário</BreadcrumbPage>
+                    <BreadcrumbPage>Editar Usuário</BreadcrumbPage>
                   </BreadcrumbItem>
                 </BreadcrumbList>
               </Breadcrumb>
             </div>
 
-            {/* User Avatar Button (Mobile/Desktop alternative position) */}
+            {/* User Avatar Button */}
             <div className="ml-auto flex items-center gap-2">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -502,10 +471,10 @@ const CreateUser = () => {
               {/* Card Header */}
               <div className="border-b border-gray-200 bg-gradient-to-r from-emerald-50 to-teal-50 px-6 md:px-8 py-6">
                 <h1 className="text-2xl md:text-3xl font-bold text-gray-800">
-                  Cadastrar Usuário
+                  Editar Usuário
                 </h1>
                 <p className="text-sm md:text-base text-gray-600 mt-2">
-                  Preencha os dados do novo usuário no sistema
+                  Atualize os dados do usuário no sistema
                 </p>
               </div>
 
@@ -515,7 +484,7 @@ const CreateUser = () => {
                   {/* Form Section Header */}
                   <div className="mb-6">
                     <h2 className="text-lg font-semibold text-gray-800 mb-1">
-                      Informações Básicas
+                      Informações do Usuário
                     </h2>
                     <p className="text-sm text-gray-600">
                       Os campos marcados com <span className="text-red-500">*</span> são
@@ -532,206 +501,97 @@ const CreateUser = () => {
                       </Label>
                       <Select
                         value={formData.perfil || undefined}
-                        onValueChange={handleProfileChange}
+                        onValueChange={(value) => updateFormField('perfil', value as 'Corpo Técnico' | 'Requerente' | 'Técnico')}
                       >
                         <SelectTrigger className="h-11 border-gray-300 focus:border-emerald-500">
                           <SelectValue placeholder="Selecione o perfil" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Requerente">Requerente</SelectItem>
-                          <SelectItem value="Técnico">Técnico</SelectItem>
                           <SelectItem value="Corpo Técnico">Corpo Técnico</SelectItem>
+                          <SelectItem value="Técnico">Técnico</SelectItem>
+                          <SelectItem value="Requerente">Requerente</SelectItem>
                         </SelectContent>
                       </Select>
                       {errors.perfil && <p className="text-xs text-red-500">{errors.perfil}</p>}
-                      
-                      {/* Avisos condicionais */}
-                      {formData.perfil === 'Corpo Técnico' && (
-                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-2">
-                          <p className="text-sm text-blue-800">
-                            <strong>Atenção:</strong> Usuários do Corpo Técnico precisarão de aprovação do administrador. Um email com link de convite será enviado.
-                          </p>
-                        </div>
-                      )}
-                      
-                      {(formData.perfil === 'Requerente' || formData.perfil === 'Técnico') && (
-                        <div className="bg-green-50 border border-green-200 rounded-lg p-3 mt-2">
-                          <p className="text-sm text-green-800">
-                            <strong>Info:</strong> Este usuário será aprovado automaticamente e poderá acessar o sistema imediatamente.
-                          </p>
-                        </div>
-                      )}
                     </div>
 
-                    {/* Campos condicionais baseados no perfil */}
-                    {showFields && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        transition={{ duration: 0.3 }}
-                        className="space-y-6"
-                      >
+                    {/* Nome Input */}
+                    <div className="space-y-2">
+                      <Label htmlFor="name" className="text-sm font-medium text-gray-700">
+                        Nome Completo <span className="text-red-500">*</span>
+                      </Label>
+                      <Input
+                        id="name"
+                        type="text"
+                        placeholder="Digite o nome completo"
+                        value={formData.name}
+                        onChange={(e) => updateFormField('name', e.target.value)}
+                        className={`h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500 ${
+                          errors.name ? 'border-red-500' : ''
+                        }`}
+                      />
+                      {errors.name && <p className="text-xs text-red-500">{errors.name}</p>}
+                    </div>
 
-                        {/* Nome Input */}
-                        <div className="space-y-2">
-                          <Label htmlFor="name" className="text-sm font-medium text-gray-700">
-                            Nome Completo <span className="text-red-500">*</span>
-                          </Label>
-                          <Input
-                            id="name"
-                            type="text"
-                            placeholder="Digite o nome completo"
-                            value={formData.name}
-                            onChange={(e) => updateFormField('name', e.target.value)}
-                            className={`h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500 ${
-                              errors.name ? 'border-red-500' : ''
-                            }`}
-                          />
-                          {errors.name && <p className="text-xs text-red-500">{errors.name}</p>}
-                        </div>
+                    {/* CPF/CNPJ Input */}
+                    <div className="space-y-2">
+                      <Label htmlFor="cpf" className="text-sm font-medium text-gray-700">
+                        CPF ou CNPJ <span className="text-red-500">*</span>
+                      </Label>
+                      <Input
+                        id="cpf"
+                        type="text"
+                        placeholder="000.000.000-00 ou 00.000.000/0000-00"
+                        value={formData.cpf}
+                        onChange={(e) => handleCPFChange(e.target.value)}
+                        className={`h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500 ${
+                          errors.cpf ? 'border-red-500' : ''
+                        }`}
+                        maxLength={18}
+                      />
+                      {errors.cpf && <p className="text-xs text-red-500">{errors.cpf}</p>}
+                    </div>
 
-                        {/* CPF/CNPJ Input */}
-                        <div className="space-y-2">
-                          <Label htmlFor="cpf" className="text-sm font-medium text-gray-700">
-                            CPF ou CNPJ <span className="text-red-500">*</span>
-                          </Label>
-                          <Input
-                            id="cpf"
-                            type="text"
-                            placeholder="000.000.000-00 ou 00.000.000/0000-00"
-                            value={formData.cpf}
-                            onChange={(e) => handleCPFChange(e.target.value)}
-                            className={`h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500 ${
-                              errors.cpf ? 'border-red-500' : ''
-                            }`}
-                            maxLength={18}
-                          />
-                          {errors.cpf && <p className="text-xs text-red-500">{errors.cpf}</p>}
-                          <p className="text-xs text-gray-500 mt-1">
-                            Informe apenas números, a formatação será automática
-                          </p>
-                        </div>
+                    {/* Email Input - Apenas para perfis Corpo Técnico e Técnico */}
+                    {formData.perfil !== 'Requerente' && (
+                      <div className="space-y-2">
+                        <Label htmlFor="email" className="text-sm font-medium text-gray-700">
+                          Email <span className="text-red-500">*</span>
+                        </Label>
+                        <Input
+                          id="email"
+                          type="email"
+                          placeholder="exemplo@exemplo.com"
+                          value={formData.email}
+                          onChange={(e) => updateFormField('email', e.target.value)}
+                          className={`h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500 ${
+                            errors.email ? 'border-red-500' : ''
+                          }`}
+                        />
+                        {errors.email && <p className="text-xs text-red-500">{errors.email}</p>}
+                      </div>
+                    )}
 
-                        {/* Email Input - Apenas para outros perfis */}
-                        {formData.perfil !== 'Requerente' && (
-                          <div className="space-y-2">
-                            <Label htmlFor="email" className="text-sm font-medium text-gray-700">
-                              Email <span className="text-red-500">*</span>
-                            </Label>
-                            <Input
-                              id="email"
-                              type="email"
-                              placeholder="exemplo@exemplo.com"
-                              value={formData.email}
-                              onChange={(e) => updateFormField('email', e.target.value)}
-                              className={`h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500 ${
-                                errors.email ? 'border-red-500' : ''
-                              }`}
-                            />
-                            {errors.email && <p className="text-xs text-red-500">{errors.email}</p>}
-                            <p className="text-xs text-gray-500 mt-1">
-                              Este email será usado para login e notificações
-                            </p>
-                          </div>
-                        )}
-
-                        {/* Celular Input - Apenas para outros perfis */}
-                        {formData.perfil !== 'Requerente' && (
-                          <div className="space-y-2">
-                            <Label htmlFor="phone" className="text-sm font-medium text-gray-700">
-                              Celular
-                            </Label>
-                            <Input
-                              id="phone"
-                              type="text"
-                              placeholder="(00) 00000-0000"
-                              value={formData.phone}
-                              onChange={(e) => handlePhoneChange(e.target.value)}
-                              className={`h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500 ${
-                                errors.phone ? 'border-red-500' : ''
-                              }`}
-                              maxLength={15}
-                            />
-                            {errors.phone && <p className="text-xs text-red-500">{errors.phone}</p>}
-                            <p className="text-xs text-gray-500 mt-1">Campo opcional</p>
-                          </div>
-                        )}
-
-                        {/* Campos específicos para perfil Requerente */}
-                        {formData.perfil === 'Requerente' && (
-                          <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.3, delay: 0.1 }}
-                            className="space-y-6 border-t border-gray-200 pt-6"
-                          >
-                            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-                              <h3 className="text-lg font-semibold text-amber-800 mb-2">
-                                Contato para Medição
-                              </h3>
-                              <p className="text-sm text-amber-700">
-                                Os campos abaixo são opcionais e referem-se ao contato responsável pela medição de hidrômetro e horímetro.
-                              </p>
-                            </div>
-
-                            {/* CPF do Contato */}
-                            <div className="space-y-2">
-                              <Label htmlFor="contato_medicao_cpf" className="text-sm font-medium text-gray-700">
-                                CPF do Contato
-                              </Label>
-                              <Input
-                                id="contato_medicao_cpf"
-                                type="text"
-                                placeholder="000.000.000-00"
-                                value={formData.contato_medicao_cpf || ''}
-                                onChange={(e) => handleContatoCPFChange(e.target.value)}
-                                className={`h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500 ${
-                                  errors.contato_medicao_cpf ? 'border-red-500' : ''
-                                }`}
-                                maxLength={14}
-                              />
-                              {errors.contato_medicao_cpf && <p className="text-xs text-red-500">{errors.contato_medicao_cpf}</p>}
-                            </div>
-
-                            {/* Email do Contato */}
-                            <div className="space-y-2">
-                              <Label htmlFor="contato_medicao_email" className="text-sm font-medium text-gray-700">
-                                Email do Contato
-                              </Label>
-                              <Input
-                                id="contato_medicao_email"
-                                type="email"
-                                placeholder="exemplo@exemplo.com"
-                                value={formData.contato_medicao_email || ''}
-                                onChange={(e) => updateFormField('contato_medicao_email', e.target.value)}
-                                className={`h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500 ${
-                                  errors.contato_medicao_email ? 'border-red-500' : ''
-                                }`}
-                              />
-                              {errors.contato_medicao_email && <p className="text-xs text-red-500">{errors.contato_medicao_email}</p>}
-                            </div>
-
-                            {/* Celular do Contato */}
-                            <div className="space-y-2">
-                              <Label htmlFor="contato_medicao_celular" className="text-sm font-medium text-gray-700">
-                                Celular do Contato
-                              </Label>
-                              <Input
-                                id="contato_medicao_celular"
-                                type="text"
-                                placeholder="(00) 00000-0000"
-                                value={formData.contato_medicao_celular || ''}
-                                onChange={(e) => handleContatoPhoneChange(e.target.value)}
-                                className={`h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500 ${
-                                  errors.contato_medicao_celular ? 'border-red-500' : ''
-                                }`}
-                                maxLength={15}
-                              />
-                              {errors.contato_medicao_celular && <p className="text-xs text-red-500">{errors.contato_medicao_celular}</p>}
-                            </div>
-                          </motion.div>
-                        )}
-                      </motion.div>
+                    {/* Celular Input - Apenas para perfis Corpo Técnico e Técnico */}
+                    {formData.perfil !== 'Requerente' && (
+                      <div className="space-y-2">
+                        <Label htmlFor="phone" className="text-sm font-medium text-gray-700">
+                          Celular
+                        </Label>
+                        <Input
+                          id="phone"
+                          type="text"
+                          placeholder="(00) 00000-0000"
+                          value={formData.phone}
+                          onChange={(e) => handlePhoneChange(e.target.value)}
+                          className={`h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500 ${
+                            errors.phone ? 'border-red-500' : ''
+                          }`}
+                          maxLength={15}
+                        />
+                        {errors.phone && <p className="text-xs text-red-500">{errors.phone}</p>}
+                        <p className="text-xs text-gray-500 mt-1">Campo opcional</p>
+                      </div>
                     )}
                   </div>
 
@@ -744,23 +604,23 @@ const CreateUser = () => {
                       className="bg-gray-100 hover:bg-gray-200 text-gray-700 border-gray-300 h-11 px-6 font-medium"
                     >
                       <X className="w-4 h-4 mr-2" />
-                      Cancelar
+                      Voltar
                     </Button>
                     <Button
                       type="button"
                       onClick={handleSave}
-                      disabled={loading}
+                      disabled={saving}
                       className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white h-11 px-6 font-medium shadow-md hover:shadow-lg transition-all duration-200"
                     >
-                      {loading ? (
+                      {saving ? (
                         <>
                           <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Criando usuário...
+                          Salvando...
                         </>
                       ) : (
                         <>
                           <Save className="w-4 h-4 mr-2" />
-                          Salvar Usuário
+                          Alterar
                         </>
                       )}
                     </Button>
@@ -775,4 +635,4 @@ const CreateUser = () => {
   );
 };
 
-export default CreateUser;
+export default EditUser;

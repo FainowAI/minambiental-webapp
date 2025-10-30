@@ -9,10 +9,13 @@ import ForgotPassword from "./pages/ForgotPassword";
 import PasswordResetConfirmation from "./pages/PasswordResetConfirmation";
 import ResetPassword from "./pages/ResetPassword";
 import SetPassword from "./pages/SetPassword";
+import PendingApproval from "./pages/PendingApproval";
 import Dashboard from "./pages/Dashboard";
 import Home from "./pages/Home";
 import Users from "./pages/Users";
 import CreateUser from "./pages/CreateUser";
+import EditUser from "./pages/EditUser";
+import ViewUser from "./pages/ViewUser";
 import Licenses from "./pages/Licenses";
 import CreateLicense from "./pages/CreateLicense";
 import NotFound from "./pages/NotFound";
@@ -34,6 +37,7 @@ const App = () => (
           <Route path="/password-reset-confirmation" element={<PasswordResetConfirmation />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/set-password" element={<SetPassword />} />
+          <Route path="/pending-approval" element={<PendingApproval />} />
           
           {/* Protected Routes */}
           <Route path="/home" element={
@@ -61,7 +65,17 @@ const App = () => (
               <CreateUser />
             </ProtectedRoute>
           } />
-          
+          <Route path="/edit-user/:id" element={
+            <ProtectedRoute>
+              <EditUser />
+            </ProtectedRoute>
+          } />
+          <Route path="/view-user/:id" element={
+            <ProtectedRoute>
+              <ViewUser />
+            </ProtectedRoute>
+          } />
+
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

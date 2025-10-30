@@ -55,9 +55,36 @@ const LoginModal = ({ open, onOpenChange }: LoginModalProps) => {
 
       // Login bem-sucedido
       if (data.user) {
-        toast.success('Login realizado com sucesso!');
-        onOpenChange(false);
-        navigate('/home');
+        // Verificar status de aprovação antes de redirecionar
+        const { data: usuario } = await supabase
+          .from('usuarios')
+          .select('status_aprovacao, perfil')
+          .eq('auth_user_id', data.user.id)
+          .single();
+
+        if (usuario) {
+          if (usuario.status_aprovacao === 'Aprovado' && usuario.perfil === 'Corpo Técnico') {
+            toast.success('Login realizado com sucesso!');
+            onOpenChange(false);
+            navigate('/home');
+          } else if (usuario.status_aprovacao === 'Pendente') {
+            toast.info('Seu cadastro está aguardando aprovação. Você será redirecionado para a página de status.');
+            onOpenChange(false);
+            navigate('/pending-approval');
+          } else if (usuario.status_aprovacao === 'Rejeitado') {
+            toast.error('Seu acesso foi rejeitado. Entre em contato com o administrador.');
+            await supabase.auth.signOut();
+            return;
+          } else if (usuario.perfil !== 'Corpo Técnico') {
+            toast.error('Apenas usuários do Corpo Técnico podem acessar esta plataforma.');
+            await supabase.auth.signOut();
+            return;
+          }
+        } else {
+          toast.error('Dados do usuário não encontrados. Tente novamente.');
+          await supabase.auth.signOut();
+          return;
+        }
       }
     } catch (err) {
       console.error('Erro inesperado:', err);

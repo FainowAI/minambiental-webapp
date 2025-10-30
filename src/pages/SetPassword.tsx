@@ -147,7 +147,7 @@ const SetPassword = () => {
 
       toast({
         title: 'Senha definida com sucesso!',
-        description: 'Você já pode fazer login com sua nova senha.',
+        description: 'Confirme seu email e aguarde aprovação do administrador para acessar a plataforma.',
       });
 
       setTimeout(() => {

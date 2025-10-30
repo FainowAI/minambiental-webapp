@@ -3,6 +3,7 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Loader2, AlertCircle, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import PendingApproval from '@/pages/PendingApproval';
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -54,27 +55,7 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
 
   // Check if corpo tecnico is approved
   if (!isApproved) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center max-w-md mx-auto p-6">
-          <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <AlertCircle className="w-8 h-8 text-yellow-600" />
-          </div>
-          <h1 className="text-2xl font-bold text-gray-800 mb-2">Aguardando Aprovação</h1>
-          <p className="text-gray-600 mb-6">
-            Seu cadastro está aguardando aprovação de um administrador. 
-            Você receberá uma notificação quando sua conta for aprovada.
-          </p>
-          <Button 
-            onClick={() => window.location.href = '/'}
-            variant="outline"
-            className="border-gray-300 text-gray-700 hover:bg-gray-50"
-          >
-            Voltar ao Login
-          </Button>
-        </div>
-      </div>
-    );
+    return <PendingApproval />;
   }
 
   // User is authenticated and approved (or not corpo tecnico), render children
