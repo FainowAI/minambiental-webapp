@@ -530,7 +530,7 @@ const ViewUser = () => {
                     {/* CPF Field */}
                     <div className="space-y-2">
                       <Label htmlFor="cpf" className="text-sm font-medium text-gray-700">
-                        CPF <span className="text-red-500">*</span>
+                        {userData.perfil === 'Requerente' ? 'CNPJ' : 'CPF'} <span className="text-red-500">*</span>
                       </Label>
                       <Input
                         id="cpf"
