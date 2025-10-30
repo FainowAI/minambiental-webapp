@@ -241,6 +241,7 @@ export type Database = {
           numero_licenca: string
           objeto_ato: string | null
           pdf_licenca: string | null
+          prioridade: Database["public"]["Enums"]["prioridade_licenca"] | null
           requerente_id: string
           sistema_aquifero: string | null
           status: string | null
@@ -263,6 +264,7 @@ export type Database = {
           numero_licenca: string
           objeto_ato?: string | null
           pdf_licenca?: string | null
+          prioridade?: Database["public"]["Enums"]["prioridade_licenca"] | null
           requerente_id: string
           sistema_aquifero?: string | null
           status?: string | null
@@ -285,6 +287,7 @@ export type Database = {
           numero_licenca?: string
           objeto_ato?: string | null
           pdf_licenca?: string | null
+          prioridade?: Database["public"]["Enums"]["prioridade_licenca"] | null
           requerente_id?: string
           sistema_aquifero?: string | null
           status?: string | null
@@ -718,6 +721,7 @@ export type Database = {
     Enums: {
       app_role: "admin" | "user" | "gestor"
       invitation_status: "pending" | "accepted" | "expired"
+      prioridade_licenca: "URGENTE" | "ALTA" | "MÉDIA" | "BAIXA"
       user_profile: "corpo_tecnico" | "tecnico" | "requerente"
     }
     CompositeTypes: {
@@ -848,6 +852,7 @@ export const Constants = {
     Enums: {
       app_role: ["admin", "user", "gestor"],
       invitation_status: ["pending", "accepted", "expired"],
+      prioridade_licenca: ["URGENTE", "ALTA", "MÉDIA", "BAIXA"],
       user_profile: ["corpo_tecnico", "tecnico", "requerente"],
     },
   },

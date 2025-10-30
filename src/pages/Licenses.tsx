@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { useQuery } from '@tanstack/react-query';
+import { getLicenses, LicenseFilters, LicenseData } from '@/services/licenseService';
+import { toast } from 'sonner';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Home as HomeIcon,
   FileText,
@@ -72,12 +76,10 @@ const Licenses = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [currentPage, setCurrentPage] = useState(1);
-  const totalItems = 85;
-  const itemsPerPage = 10;
-  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   // Filter state
-  const [filters, setFilters] = useState({
+  const [filters, setFilters] = useState<LicenseFilters>({
     cnpj: '',
     requester: '',
     priority: '',
@@ -88,6 +90,17 @@ const Licenses = () => {
     validityStart: '',
     validityEnd: '',
   });
+
+  // Fetch licenses data
+  const { data: licensesData, isLoading, isError, refetch } = useQuery({
+    queryKey: ['licenses', filters, currentPage, itemsPerPage],
+    queryFn: () => getLicenses(filters, currentPage, itemsPerPage),
+    staleTime: 30000, // 30 seconds
+  });
+
+  const licenses = licensesData?.data || [];
+  const totalItems = licensesData?.count || 0;
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
 
   // Navigation items for the sidebar
   const navItems = [
@@ -111,89 +124,6 @@ const Licenses = () => {
     },
   ];
 
-  // Mock data for licenses
-  const licenses = [
-    {
-      cnpj: '99.999.999/9999-99',
-      requester: 'xxxxxxxxxxxxxxxxxxx',
-      act: 'Uso de recursos hídricos',
-      municipality: 'Campo Grande',
-      priority: 'URGENTE',
-      status: 'Ativo',
-    },
-    {
-      cnpj: '99.999.999/9999-99',
-      requester: 'xxxxxxxxxxxxxxxxxxx',
-      act: 'Uso de recursos hídricos',
-      municipality: 'Campo Grande',
-      priority: 'URGENTE',
-      status: 'Ativo',
-    },
-    {
-      cnpj: '99.999.999/9999-99',
-      requester: 'xxxxxxxxxxxxxxxxxxx',
-      act: 'Uso de recursos hídricos',
-      municipality: 'Campo Grande',
-      priority: 'ALTA',
-      status: 'Ativo',
-    },
-    {
-      cnpj: '99.999.999/9999-99',
-      requester: 'xxxxxxxxxxxxxxxxxxx',
-      act: 'Uso de recursos hídricos',
-      municipality: 'Campo Grande',
-      priority: 'ALTA',
-      status: 'Ativo',
-    },
-    {
-      cnpj: '99.999.999/9999-99',
-      requester: 'xxxxxxxxxxxxxxxxxxx',
-      act: 'Uso de recursos hídricos',
-      municipality: 'Bonito',
-      priority: 'ALTA',
-      status: 'Ativo',
-    },
-    {
-      cnpj: '99.999.999/9999-99',
-      requester: 'xxxxxxxxxxxxxxxxxxx',
-      act: 'Uso de recursos hídricos',
-      municipality: 'Bonito',
-      priority: 'MÉDIA',
-      status: 'Ativo',
-    },
-    {
-      cnpj: '99.999.999/9999-99',
-      requester: 'xxxxxxxxxxxxxxxxxxx',
-      act: 'Uso de recursos hídricos',
-      municipality: 'Bonito',
-      priority: 'MÉDIA',
-      status: 'Ativo',
-    },
-    {
-      cnpj: '99.999.999/9999-99',
-      requester: 'xxxxxxxxxxxxxxxxxxx',
-      act: 'Uso de recursos hídricos',
-      municipality: 'Aquidauana',
-      priority: 'BAIXA',
-      status: 'Ativo',
-    },
-    {
-      cnpj: '99.999.999/9999-99',
-      requester: 'xxxxxxxxxxxxxxxxxxx',
-      act: 'Uso de recursos hídricos',
-      municipality: 'Aquidauana',
-      priority: 'BAIXA',
-      status: 'Ativo',
-    },
-    {
-      cnpj: '99.999.999/9999-99',
-      requester: 'xxxxxxxxxxxxxxxxxxx',
-      act: 'Uso de recursos hídricos',
-      municipality: 'Aquidauana',
-      priority: 'BAIXA',
-      status: 'Ativo',
-    },
-  ];
 
   const handleLogout = () => {
     console.log('Logout clicked');
@@ -210,6 +140,11 @@ const Licenses = () => {
     return badges[priority as keyof typeof badges] || 'bg-gray-500';
   };
 
+  const updateFilter = (key: keyof LicenseFilters, value: string) => {
+    setFilters(prev => ({ ...prev, [key]: value }));
+    setCurrentPage(1);
+  };
+
   const clearFilters = () => {
     setFilters({
       cnpj: '',
@@ -222,6 +157,7 @@ const Licenses = () => {
       validityStart: '',
       validityEnd: '',
     });
+    setCurrentPage(1);
   };
 
   return (
@@ -404,7 +340,7 @@ const Licenses = () => {
                     id="cnpj"
                     placeholder="99.999.999/9999-99"
                     value={filters.cnpj}
-                    onChange={(e) => setFilters({ ...filters, cnpj: e.target.value })}
+                    onChange={(e) => updateFilter('cnpj', e.target.value)}
                     className="h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500"
                   />
                 </div>
@@ -416,9 +352,9 @@ const Licenses = () => {
                   </Label>
                   <Input
                     id="requester"
-                    placeholder="xxxxxxxxxxxxxxxxxxx"
+                    placeholder="Digite o nome"
                     value={filters.requester}
-                    onChange={(e) => setFilters({ ...filters, requester: e.target.value })}
+                    onChange={(e) => updateFilter('requester', e.target.value)}
                     className="h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500"
                   />
                 </div>
@@ -428,14 +364,14 @@ const Licenses = () => {
                   <Label htmlFor="actType" className="text-sm font-medium text-gray-700">
                     Tipo do Ato
                   </Label>
-                  <Select value={filters.actType} onValueChange={(value) => setFilters({ ...filters, actType: value })}>
+                  <Select value={filters.actType} onValueChange={(value) => updateFilter('actType', value)}>
                     <SelectTrigger className="h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500">
                       <SelectValue placeholder="Selecione" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="recursos-hidricos">Uso de recursos hídricos</SelectItem>
-                      <SelectItem value="supressao-vegetal">Supressão vegetal</SelectItem>
-                      <SelectItem value="licenciamento">Licenciamento ambiental</SelectItem>
+                      <SelectItem value="Uso de recursos hídricos">Uso de recursos hídricos</SelectItem>
+                      <SelectItem value="Licenciamento ambiental">Licenciamento ambiental</SelectItem>
+                      <SelectItem value="Outorga">Outorga</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -445,17 +381,13 @@ const Licenses = () => {
                   <Label htmlFor="municipality" className="text-sm font-medium text-gray-700">
                     Município
                   </Label>
-                  <Select value={filters.municipality} onValueChange={(value) => setFilters({ ...filters, municipality: value })}>
-                    <SelectTrigger className="h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500">
-                      <SelectValue placeholder="Selecione" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="campo-grande">Campo Grande</SelectItem>
-                      <SelectItem value="bonito">Bonito</SelectItem>
-                      <SelectItem value="aquidauana">Aquidauana</SelectItem>
-                      <SelectItem value="dourados">Dourados</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Input
+                    id="municipality"
+                    placeholder="Digite o município"
+                    value={filters.municipality}
+                    onChange={(e) => updateFilter('municipality', e.target.value)}
+                    className="h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500"
+                  />
                 </div>
 
                 {/* Prioridade */}
@@ -463,15 +395,15 @@ const Licenses = () => {
                   <Label htmlFor="priority" className="text-sm font-medium text-gray-700">
                     Prioridade
                   </Label>
-                  <Select value={filters.priority} onValueChange={(value) => setFilters({ ...filters, priority: value })}>
+                  <Select value={filters.priority} onValueChange={(value) => updateFilter('priority', value)}>
                     <SelectTrigger className="h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500">
                       <SelectValue placeholder="Selecione" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="urgente">Urgente</SelectItem>
-                      <SelectItem value="alta">Alta</SelectItem>
-                      <SelectItem value="media">Média</SelectItem>
-                      <SelectItem value="baixa">Baixa</SelectItem>
+                      <SelectItem value="URGENTE">Urgente</SelectItem>
+                      <SelectItem value="ALTA">Alta</SelectItem>
+                      <SelectItem value="MÉDIA">Média</SelectItem>
+                      <SelectItem value="BAIXA">Baixa</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -481,15 +413,15 @@ const Licenses = () => {
                   <Label htmlFor="status" className="text-sm font-medium text-gray-700">
                     Status
                   </Label>
-                  <Select value={filters.status} onValueChange={(value) => setFilters({ ...filters, status: value })}>
+                  <Select value={filters.status} onValueChange={(value) => updateFilter('status', value)}>
                     <SelectTrigger className="h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500">
                       <SelectValue placeholder="Selecione" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="ativo">Ativo</SelectItem>
-                      <SelectItem value="inativo">Inativo</SelectItem>
-                      <SelectItem value="pendente">Pendente</SelectItem>
-                      <SelectItem value="vencido">Vencido</SelectItem>
+                      <SelectItem value="Ativo">Ativo</SelectItem>
+                      <SelectItem value="Inativo">Inativo</SelectItem>
+                      <SelectItem value="Vencido">Vencido</SelectItem>
+                      <SelectItem value="Em análise">Em análise</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -499,16 +431,14 @@ const Licenses = () => {
                   <Label htmlFor="technician" className="text-sm font-medium text-gray-700">
                     Técnico Responsável
                   </Label>
-                  <Select value={filters.technician} onValueChange={(value) => setFilters({ ...filters, technician: value })}>
-                    <SelectTrigger className="h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500">
-                      <SelectValue placeholder="Selecione" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="joao-silva">João Silva</SelectItem>
-                      <SelectItem value="maria-santos">Maria Santos</SelectItem>
-                      <SelectItem value="pedro-oliveira">Pedro Oliveira</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Input
+                    id="technician"
+                    placeholder="Em desenvolvimento"
+                    value={filters.technician}
+                    onChange={(e) => updateFilter('technician', e.target.value)}
+                    className="h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500"
+                    disabled
+                  />
                 </div>
 
                 {/* Validade da Licença */}
@@ -521,14 +451,14 @@ const Licenses = () => {
                       type="date"
                       placeholder="Data de Início"
                       value={filters.validityStart}
-                      onChange={(e) => setFilters({ ...filters, validityStart: e.target.value })}
+                      onChange={(e) => updateFilter('validityStart', e.target.value)}
                       className="h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500"
                     />
                     <Input
                       type="date"
                       placeholder="Data Fim"
                       value={filters.validityEnd}
-                      onChange={(e) => setFilters({ ...filters, validityEnd: e.target.value })}
+                      onChange={(e) => updateFilter('validityEnd', e.target.value)}
                       className="h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500"
                     />
                   </div>
@@ -538,31 +468,27 @@ const Licenses = () => {
               {/* Action Buttons */}
               <div className="mt-6 flex flex-wrap items-center justify-end gap-3">
                 <Button
-                  variant="secondary"
-                  className="bg-gray-600 text-white hover:bg-gray-700"
-                  onClick={clearFilters}
+                  variant="outline"
+                  className="h-11 border-emerald-600 text-emerald-600 hover:bg-emerald-50"
+                  onClick={() => toast.info('Funcionalidade em desenvolvimento')}
                 >
                   <FileDown className="mr-2 h-4 w-4" />
-                  Gerar Relatório Anual
+                  Gerar Relatório Mensal
                 </Button>
                 <Button
                   onClick={clearFilters}
                   variant="outline"
-                  className="border-gray-300 hover:bg-gray-50"
+                  className="h-11 border-gray-300 hover:bg-gray-50"
                 >
                   <X className="mr-2 h-4 w-4" />
                   Limpar Filtros
                 </Button>
-                <Button className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700">
-                  <Search className="mr-2 h-4 w-4" />
-                  Buscar
-                </Button>
                 <Button
                   onClick={() => navigate('/create-license')}
-                  className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700"
+                  className="h-11 bg-emerald-600 hover:bg-emerald-700 text-white"
                 >
                   <Plus className="mr-2 h-4 w-4" />
-                  Cadastrar Contrato e Licença
+                  Cadastrar Licença e Contrato
                 </Button>
               </div>
             </motion.div>
@@ -588,58 +514,87 @@ const Licenses = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {licenses.map((license, index) => (
-                      <TableRow key={index} className="hover:bg-gray-50">
-                        <TableCell className="text-sm text-gray-600">{license.cnpj}</TableCell>
-                        <TableCell className="text-sm text-gray-600">{license.requester}</TableCell>
-                        <TableCell className="text-sm text-gray-600">{license.act}</TableCell>
-                        <TableCell className="text-sm text-gray-600">{license.municipality}</TableCell>
-                        <TableCell>
-                          <Badge
-                            className={`${getPriorityBadge(license.priority)} text-white text-xs font-medium`}
-                          >
-                            {license.priority}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge className="bg-emerald-600 hover:bg-emerald-600 text-white text-xs font-medium">
-                            {license.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
-                                >
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Visualizar</p>
-                              </TooltipContent>
-                            </Tooltip>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
-                                >
-                                  <Edit className="h-4 w-4" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Editar</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </div>
+                    {isLoading ? (
+                      Array.from({ length: itemsPerPage }).map((_, index) => (
+                        <TableRow key={`skeleton-${index}`}>
+                          <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                          <TableCell><Skeleton className="h-4 w-48" /></TableCell>
+                          <TableCell><Skeleton className="h-4 w-40" /></TableCell>
+                          <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                          <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                          <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                          <TableCell><Skeleton className="h-8 w-20" /></TableCell>
+                        </TableRow>
+                      ))
+                    ) : isError ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-8 text-red-500">
+                          Erro ao carregar licenças. Por favor, tente novamente.
                         </TableCell>
                       </TableRow>
-                    ))}
+                    ) : licenses.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                          Nenhuma licença encontrada.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      licenses.map((license: LicenseData) => (
+                        <TableRow key={license.id} className="hover:bg-gray-50">
+                          <TableCell className="font-medium">
+                            {license.requerente?.cpf_cnpj || '-'}
+                          </TableCell>
+                          <TableCell>{license.requerente?.nome_razao_social || '-'}</TableCell>
+                          <TableCell>{license.tipo_ato}</TableCell>
+                          <TableCell>{license.municipio}</TableCell>
+                          <TableCell>
+                            <Badge className={`${getPriorityBadge(license.prioridade)} text-white`}>
+                              {license.prioridade}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={license.status === 'Ativo' ? 'default' : 'secondary'}>
+                              {license.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => toast.info('Funcionalidade em desenvolvimento')}
+                                    className="h-8 w-8 text-emerald-600 hover:text-emerald-700"
+                                  >
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Visualizar</p>
+                                </TooltipContent>
+                              </Tooltip>
+
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => toast.info('Funcionalidade em desenvolvimento')}
+                                    className="h-8 w-8 text-blue-600 hover:text-blue-700"
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Editar</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
                   </TableBody>
                 </Table>
               </TooltipProvider>
@@ -647,71 +602,57 @@ const Licenses = () => {
               {/* Pagination */}
               <div className="flex flex-wrap items-center justify-between gap-4 border-t border-gray-200 px-6 py-4">
                 <div className="text-sm text-gray-600">
-                  Mostrando {(currentPage - 1) * itemsPerPage + 1}-
-                  {Math.min(currentPage * itemsPerPage, totalItems)} de {totalItems} resultados
+                  {totalItems > 0 ? (
+                    <>
+                      Mostrando {(currentPage - 1) * itemsPerPage + 1}-
+                      {Math.min(currentPage * itemsPerPage, totalItems)} de {totalItems} resultados
+                    </>
+                  ) : (
+                    'Nenhum resultado encontrado'
+                  )}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                    disabled={currentPage === 1}
-                    className="h-8 w-8"
+                  <Select 
+                    value={String(itemsPerPage)} 
+                    onValueChange={(value) => {
+                      setItemsPerPage(Number(value));
+                      setCurrentPage(1);
+                    }}
                   >
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-
-                  {[1, 2, 3, 4, 5, 6, 7, 8].map((page) => (
-                    <Button
-                      key={page}
-                      variant={currentPage === page ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => setCurrentPage(page)}
-                      className={
-                        currentPage === page
-                          ? 'h-8 w-8 bg-emerald-600 text-white hover:bg-emerald-700'
-                          : 'h-8 w-8'
-                      }
-                    >
-                      {page}
-                    </Button>
-                  ))}
-
-                  <span className="text-sm text-gray-600">...</span>
-                  <Button variant="outline" size="sm" className="h-8 w-8">
-                    20
-                  </Button>
-
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                    disabled={currentPage === totalPages}
-                    className="h-8 w-8"
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-
-                  <Select value={String(itemsPerPage)}>
-                    <SelectTrigger className="h-8 w-[120px]">
+                    <SelectTrigger className="h-9 w-[100px]">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="10">10 / página</SelectItem>
-                      <SelectItem value="20">20 / página</SelectItem>
-                      <SelectItem value="50">50 / página</SelectItem>
+                      <SelectItem value="10">10 itens</SelectItem>
+                      <SelectItem value="20">20 itens</SelectItem>
+                      <SelectItem value="50">50 itens</SelectItem>
+                      <SelectItem value="100">100 itens</SelectItem>
                     </SelectContent>
                   </Select>
 
-                  <span className="text-sm text-gray-600">Ir para</span>
-                  <Input
-                    type="number"
-                    min="1"
-                    max={totalPages}
-                    value={currentPage}
-                    onChange={(e) => setCurrentPage(Number(e.target.value))}
-                    className="h-8 w-16 text-center"
-                  />
+                  <span className="text-sm text-gray-600">
+                    Página {currentPage} de {totalPages || 1}
+                  </span>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1 || isLoading}
+                  >
+                    <ChevronLeft className="h-4 w-4 mr-1" />
+                    Anterior
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage === totalPages || isLoading || totalPages === 0}
+                  >
+                    Próxima
+                    <ChevronRight className="h-4 w-4 ml-1" />
+                  </Button>
                 </div>
               </div>
             </motion.div>
