@@ -68,6 +68,10 @@ interface UserFormData {
   email: string;
   phone: string;
   perfil: 'Corpo Técnico' | 'Requerente' | 'Técnico' | '';
+  // Campos de contato para medição (Requerente)
+  contato_medicao_cpf?: string;
+  contato_medicao_email?: string;
+  contato_medicao_celular?: string;
 }
 
 const EditUser = () => {
@@ -82,6 +86,9 @@ const EditUser = () => {
     email: '',
     phone: '',
     perfil: '',
+    contato_medicao_cpf: '',
+    contato_medicao_email: '',
+    contato_medicao_celular: '',
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -131,12 +138,16 @@ const EditUser = () => {
         setLoading(true);
         const userData = await getUserById(id);
 
+        const userDataAny = userData as any;
         setFormData({
           name: userData.nome || '',
           cpf: maskCPFOrCNPJ(userData.cpf || ''),
           email: userData.email || '',
           phone: maskPhone(userData.celular || ''),
           perfil: (userData.perfil as 'Corpo Técnico' | 'Requerente' | 'Técnico') || '',
+          contato_medicao_cpf: maskCPFOrCNPJ(userDataAny.contato_medicao_cpf || ''),
+          contato_medicao_email: userDataAny.contato_medicao_email || '',
+          contato_medicao_celular: maskPhone(userDataAny.contato_medicao_celular || ''),
         });
       } catch (error) {
         toast.error('Erro ao carregar dados do usuário');
@@ -194,6 +205,31 @@ const EditUser = () => {
         }
       }
 
+      // Validações específicas para Requerente - campos de contato opcionais mas válidos
+      if (formData.perfil === 'Requerente') {
+        // Validar CPF do contato (opcional, mas se preenchido deve ser válido)
+        if (formData.contato_medicao_cpf && formData.contato_medicao_cpf.trim()) {
+          const cpfContatoValidation = validateCPFOrCNPJ(formData.contato_medicao_cpf);
+          if (!cpfContatoValidation.valid) {
+            customErrors.contato_medicao_cpf = 'Campo inválido';
+          }
+        }
+
+        // Validar email do contato (opcional, mas se preenchido deve ser válido)
+        if (formData.contato_medicao_email && formData.contato_medicao_email.trim()) {
+          if (!validateEmail(formData.contato_medicao_email)) {
+            customErrors.contato_medicao_email = 'Campo inválido';
+          }
+        }
+
+        // Validar celular do contato (opcional, mas se preenchido deve ser válido)
+        if (formData.contato_medicao_celular && formData.contato_medicao_celular.trim()) {
+          if (!validatePhone(formData.contato_medicao_celular)) {
+            customErrors.contato_medicao_celular = 'Campo inválido';
+          }
+        }
+      }
+
       if (Object.keys(customErrors).length > 0) {
         setErrors(customErrors);
         toast.error('Por favor, corrija os campos destacados.');
@@ -212,6 +248,11 @@ const EditUser = () => {
       if (formData.perfil !== 'Requerente') {
         userData.email = formData.email;
         userData.celular = formData.phone;
+      } else {
+        // Adicionar campos de contato para Requerente
+        userData.contato_medicao_cpf = formData.contato_medicao_cpf?.replace(/\D/g, '') || null;
+        userData.contato_medicao_email = formData.contato_medicao_email || null;
+        userData.contato_medicao_celular = formData.contato_medicao_celular?.replace(/\D/g, '') || null;
       }
 
       await updateUser(id!, userData);
@@ -252,6 +293,22 @@ const EditUser = () => {
   const handlePhoneChange = (value: string) => {
     const maskedValue = maskPhone(value);
     updateFormField('phone', maskedValue);
+  };
+
+  const handleContatoCPFChange = (value: string) => {
+    const maskedValue = maskCPFOrCNPJ(value);
+    setFormData((prev) => ({ ...prev, contato_medicao_cpf: maskedValue }));
+    if (errors.contato_medicao_cpf) {
+      setErrors(prev => ({ ...prev, contato_medicao_cpf: '' }));
+    }
+  };
+
+  const handleContatoCelularChange = (value: string) => {
+    const maskedValue = maskPhone(value);
+    setFormData((prev) => ({ ...prev, contato_medicao_celular: maskedValue }));
+    if (errors.contato_medicao_celular) {
+      setErrors(prev => ({ ...prev, contato_medicao_celular: '' }));
+    }
   };
 
   if (loading) {
@@ -594,6 +651,91 @@ const EditUser = () => {
                       </div>
                     )}
                   </div>
+
+                  {/* Seção de Contato para Medição - Apenas para Requerente */}
+                  {formData.perfil === 'Requerente' && (
+                    <>
+                      {/* Divider */}
+                      <Separator className="my-8" />
+                      
+                      {/* Section Header */}
+                      <div className="mb-6">
+                        <h2 className="text-lg font-semibold text-gray-800 mb-1">
+                          Contato para medição de Hidrômetro e Horímetro
+                        </h2>
+                        <p className="text-sm text-gray-600">
+                          Campos opcionais
+                        </p>
+                      </div>
+
+                      {/* CPF do Contato */}
+                      <div className="space-y-2">
+                        <Label htmlFor="contato_medicao_cpf" className="text-sm font-medium text-gray-700">
+                          CPF
+                        </Label>
+                        <Input
+                          id="contato_medicao_cpf"
+                          type="text"
+                          placeholder="000.000.000-00"
+                          value={formData.contato_medicao_cpf || ''}
+                          onChange={(e) => handleContatoCPFChange(e.target.value)}
+                          className={`h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500 ${
+                            errors.contato_medicao_cpf ? 'border-red-500' : ''
+                          }`}
+                          maxLength={14}
+                        />
+                        {errors.contato_medicao_cpf && (
+                          <p className="text-xs text-red-500">{errors.contato_medicao_cpf}</p>
+                        )}
+                      </div>
+
+                      {/* Email do Contato */}
+                      <div className="space-y-2">
+                        <Label htmlFor="contato_medicao_email" className="text-sm font-medium text-gray-700">
+                          Email
+                        </Label>
+                        <Input
+                          id="contato_medicao_email"
+                          type="email"
+                          placeholder="exemplo@exemplo.com"
+                          value={formData.contato_medicao_email || ''}
+                          onChange={(e) => {
+                            setFormData((prev) => ({ ...prev, contato_medicao_email: e.target.value }));
+                            if (errors.contato_medicao_email) {
+                              setErrors(prev => ({ ...prev, contato_medicao_email: '' }));
+                            }
+                          }}
+                          className={`h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500 ${
+                            errors.contato_medicao_email ? 'border-red-500' : ''
+                          }`}
+                        />
+                        {errors.contato_medicao_email && (
+                          <p className="text-xs text-red-500">{errors.contato_medicao_email}</p>
+                        )}
+                      </div>
+
+                      {/* Celular do Contato */}
+                      <div className="space-y-2">
+                        <Label htmlFor="contato_medicao_celular" className="text-sm font-medium text-gray-700">
+                          Celular
+                        </Label>
+                        <Input
+                          id="contato_medicao_celular"
+                          type="text"
+                          placeholder="(00) 00000-0000"
+                          value={formData.contato_medicao_celular || ''}
+                          onChange={(e) => handleContatoCelularChange(e.target.value)}
+                          className={`h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500 ${
+                            errors.contato_medicao_celular ? 'border-red-500' : ''
+                          }`}
+                          maxLength={15}
+                        />
+                        {errors.contato_medicao_celular && (
+                          <p className="text-xs text-red-500">{errors.contato_medicao_celular}</p>
+                        )}
+                      </div>
+                    </>
+                  )}
 
                   {/* Action Buttons */}
                   <div className="flex flex-col sm:flex-row justify-end gap-3 mt-8 pt-6 border-t border-gray-200">

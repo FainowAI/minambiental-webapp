@@ -260,6 +260,10 @@ export interface UpdateUserData {
   email?: string;
   celular?: string;
   perfil: 'Corpo Técnico' | 'Requerente' | 'Técnico';
+  // Campos de contato para medição (Requerente)
+  contato_medicao_cpf?: string | null;
+  contato_medicao_email?: string | null;
+  contato_medicao_celular?: string | null;
 }
 
 export async function updateUser(userId: string, userData: UpdateUserData): Promise<void> {
@@ -298,6 +302,11 @@ export async function updateUser(userId: string, userData: UpdateUserData): Prom
     if (userData.perfil !== 'Requerente') {
       updateData.email = userData.email;
       updateData.celular = cleanedCelular;
+    } else {
+      // Adicionar campos de contato para Requerente
+      updateData.contato_medicao_cpf = userData.contato_medicao_cpf || null;
+      updateData.contato_medicao_email = userData.contato_medicao_email || null;
+      updateData.contato_medicao_celular = userData.contato_medicao_celular || null;
     }
 
     const { error } = await supabase
