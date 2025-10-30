@@ -73,6 +73,10 @@ interface UserData {
   celular: string;
   perfil: 'Corpo Técnico' | 'Requerente' | 'Técnico';
   status: string;
+  // Campos de contato para medição (Requerente)
+  contato_medicao_cpf?: string;
+  contato_medicao_email?: string;
+  contato_medicao_celular?: string;
 }
 
 const ViewUser = () => {
@@ -134,7 +138,14 @@ const ViewUser = () => {
       try {
         setLoading(true);
         const user = await getUserById(id);
-        setUserData(user);
+        const userAny = user as any;
+        setUserData({
+          ...user,
+          perfil: user.perfil as 'Corpo Técnico' | 'Requerente' | 'Técnico',
+          contato_medicao_cpf: userAny.contato_medicao_cpf,
+          contato_medicao_email: userAny.contato_medicao_email,
+          contato_medicao_celular: userAny.contato_medicao_celular,
+        });
       } catch (error) {
         toast.error('Erro ao carregar dados do usuário');
         console.error('Error loading user:', error);
@@ -519,7 +530,7 @@ const ViewUser = () => {
                     {/* CPF Field */}
                     <div className="space-y-2">
                       <Label htmlFor="cpf" className="text-sm font-medium text-gray-700">
-                        CPF <span className="text-red-500">*</span>
+                        {userData.perfil === 'Requerente' ? 'CNPJ' : 'CPF'} <span className="text-red-500">*</span>
                       </Label>
                       <Input
                         id="cpf"
@@ -562,6 +573,63 @@ const ViewUser = () => {
                       </div>
                     )}
                   </div>
+
+                  {/* Seção de Contato para Medição - Apenas para Requerente */}
+                  {userData.perfil === 'Requerente' && (
+                    <>
+                      {/* Divider */}
+                      <Separator className="my-8" />
+                      
+                      {/* Section Header */}
+                      <div className="mb-6">
+                        <h2 className="text-lg font-semibold text-gray-800 mb-1">
+                          Contato para medição de Hidrômetro e Horímetro
+                        </h2>
+                      </div>
+
+                      {/* CPF do Contato */}
+                      <div className="space-y-2">
+                        <Label htmlFor="contato_medicao_cpf" className="text-sm font-medium text-gray-700">
+                          CPF
+                        </Label>
+                        <Input
+                          id="contato_medicao_cpf"
+                          type="text"
+                          value={maskCPFOrCNPJ(userData.contato_medicao_cpf || '')}
+                          disabled
+                          className="h-11 bg-gray-100 border-gray-300 text-gray-700 cursor-not-allowed"
+                        />
+                      </div>
+
+                      {/* Email do Contato */}
+                      <div className="space-y-2">
+                        <Label htmlFor="contato_medicao_email" className="text-sm font-medium text-gray-700">
+                          Email
+                        </Label>
+                        <Input
+                          id="contato_medicao_email"
+                          type="email"
+                          value={userData.contato_medicao_email || ''}
+                          disabled
+                          className="h-11 bg-gray-100 border-gray-300 text-gray-700 cursor-not-allowed"
+                        />
+                      </div>
+
+                      {/* Celular do Contato */}
+                      <div className="space-y-2">
+                        <Label htmlFor="contato_medicao_celular" className="text-sm font-medium text-gray-700">
+                          Celular
+                        </Label>
+                        <Input
+                          id="contato_medicao_celular"
+                          type="text"
+                          value={maskPhone(userData.contato_medicao_celular || '')}
+                          disabled
+                          className="h-11 bg-gray-100 border-gray-300 text-gray-700 cursor-not-allowed"
+                        />
+                      </div>
+                    </>
+                  )}
 
                   {/* Action Buttons */}
                   <div className="flex flex-col sm:flex-row justify-end gap-3 mt-8 pt-6 border-t border-gray-200">
