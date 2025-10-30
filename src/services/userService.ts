@@ -318,21 +318,25 @@ export async function updateUser(userId: string, userData: UpdateUserData): Prom
  * Check if a Requerente has active contracts
  */
 export async function hasActiveContracts(userId: string): Promise<boolean> {
-  // Buscar contratos ativos vinculados ao usuário
-  const { data, error } = await supabase
-    .from('contratos')
-    .select('id')
-    .eq('requerente_id', userId)
-    .eq('status', 'Ativo')
-    .limit(1);
-
-  if (error) {
-    console.error('Error checking active contracts:', error);
-    // Em caso de erro, retornamos true para prevenir inativação acidental
+  try {
+    // @ts-ignore - Avoid deep type inference issue
+    const { data, error } = await supabase
+      .from('contratos')
+      .select('id')
+      .eq('requerente_id', userId)
+      .eq('status', 'Ativo')
+      .limit(1);
+    
+    if (error) {
+      console.error('Error checking active contracts:', error);
+      return true;
+    }
+    
+    return data && data.length > 0;
+  } catch (error) {
+    console.error('Error in hasActiveContracts:', error);
     return true;
   }
-
-  return data && data.length > 0;
 }
 
 /**

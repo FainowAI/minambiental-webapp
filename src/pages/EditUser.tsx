@@ -136,7 +136,7 @@ const EditUser = () => {
           cpf: maskCPFOrCNPJ(userData.cpf || ''),
           email: userData.email || '',
           phone: maskPhone(userData.celular || ''),
-          perfil: userData.perfil || '',
+          perfil: (userData.perfil as 'Corpo Técnico' | 'Requerente' | 'Técnico') || '',
         });
       } catch (error) {
         toast.error('Erro ao carregar dados do usuário');

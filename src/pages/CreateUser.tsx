@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { createUserWithInvite } from '@/services/userService';
+import { createRequerente } from '@/services/requerenteService';
 import { validateCPFOrCNPJ, validateEmail, validatePhone, validateName } from '@/utils/validators';
 import { maskCPFOrCNPJ, maskPhone } from '@/utils/masks';
 import {
@@ -209,32 +210,32 @@ const CreateUser = () => {
       const userData: any = {
         nome: formData.name,
         cpf: formData.cpf.replace(/\D/g, ''),
-        perfil: formData.perfil,
       };
 
-      // Adicionar email e celular apenas para outros perfis
-      if (formData.perfil !== 'Requerente') {
-        userData.email = formData.email;
-        userData.celular = formData.phone?.replace(/\D/g, '');
-      }
-
-      // Adicionar campos de contato de medição apenas para Requerente
       if (formData.perfil === 'Requerente') {
+        // Rota específica para Requerente
+        userData.email = formData.email || undefined;
+        userData.celular = formData.phone?.replace(/\D/g, '') || undefined;
         userData.contato_medicao_cpf = formData.contato_medicao_cpf?.replace(/\D/g, '');
         userData.contato_medicao_email = formData.contato_medicao_email;
         userData.contato_medicao_celular = formData.contato_medicao_celular?.replace(/\D/g, '');
-      }
 
-      const result = await createUserWithInvite(userData);
-
-      // Mensagem condicional
-      if (result.requiresApproval) {
-        const emailMessage = formData.perfil === 'Requerente' 
-          ? 'Usuário Requerente criado!' 
-          : `Usuário ${formData.perfil} criado! Email de convite enviado para ${formData.email}`;
-        toast.success(emailMessage, { duration: 5000 });
+        await createRequerente(userData);
+        toast.success('Usuário Requerente criado com sucesso!', { duration: 5000 });
       } else {
-        toast.success(`Usuário ${formData.perfil} criado e aprovado automaticamente!`);
+        // Rota original para Corpo Técnico e Técnico
+        userData.perfil = formData.perfil;
+        userData.email = formData.email;
+        userData.celular = formData.phone?.replace(/\D/g, '');
+
+        const result = await createUserWithInvite(userData);
+        
+        if (result.requiresApproval) {
+          const emailMessage = `Usuário ${formData.perfil} criado! Email de convite enviado para ${formData.email}`;
+          toast.success(emailMessage, { duration: 5000 });
+        } else {
+          toast.success(`Usuário ${formData.perfil} criado e aprovado automaticamente!`);
+        }
       }
       
       navigate('/users');

@@ -134,7 +134,10 @@ const ViewUser = () => {
       try {
         setLoading(true);
         const user = await getUserById(id);
-        setUserData(user);
+        setUserData({
+          ...user,
+          perfil: user.perfil as 'Corpo Técnico' | 'Requerente' | 'Técnico'
+        });
       } catch (error) {
         toast.error('Erro ao carregar dados do usuário');
         console.error('Error loading user:', error);
