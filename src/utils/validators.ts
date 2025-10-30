@@ -153,3 +153,22 @@ export function validateName(name: string): boolean {
   
   return true;
 }
+
+/**
+ * Valida string DMS no formato aproximado: "xx° xx’ xx.xx" com sinal opcional
+ */
+export function validateDMS(value: string): boolean {
+  if (!value) return false;
+  const regex = /^[+-]?\s?\d{1,2}°\s\d{1,2}’\s\d{1,2}(?:\.\d{1,2})?$/;
+  return regex.test(value.trim());
+}
+
+/**
+ * Valida arquivo PDF por extensão e MIME
+ */
+export function validatePdfFile(file: File | null): boolean {
+  if (!file) return false;
+  const isPdfMime = file.type === 'application/pdf';
+  const isPdfExt = /\.pdf$/i.test(file.name);
+  return isPdfMime || isPdfExt;
+}

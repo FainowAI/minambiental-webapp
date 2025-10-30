@@ -38,3 +38,6 @@ style-guide.md
 
 #supabase
 /supbase
+
+# Windows reserved device file accidentally created
+nul

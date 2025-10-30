@@ -80,6 +80,61 @@ export function removeMask(value: string): string {
 }
 
 /**
+ * Máscara para coordenadas em graus/minutos/segundos: "xx° xx’ xx.xx" com sinal opcional
+ */
+export function maskDMS(value: string): string {
+  // Mantém apenas dígitos, +, -, °, ', . e espaços
+  let v = value.replace(/[^0-9+\-°'\.\s]/g, '');
+
+  // Remove múltiplos espaços
+  v = v.replace(/\s+/g, ' ');
+
+  // Monta padrão progressivo: DD° MM' SS.ss
+  const digits = v.replace(/[^0-9]/g, '');
+  const sign = value.trim().startsWith('-') ? '-' : value.trim().startsWith('+') ? '+' : '';
+
+  const d = digits.slice(0, 2);
+  const m = digits.slice(2, 4);
+  const s = digits.slice(4, 6);
+  const sDec = digits.slice(6, 8);
+
+  let out = sign;
+  if (d) out += `${d}°`;
+  if (m) out += ` ${m}’`;
+  if (s) out += ` ${s}`;
+  if (sDec) out += `.${sDec}`;
+  if (s || sDec) out += '';
+
+  return out.trim();
+}
+
+/**
+ * Máscara numérica com duas casas decimais para volume em m³
+ */
+export function maskDecimalTwoPlaces(value: string): string {
+  const cleaned = value.replace(/[^0-9]/g, '');
+  if (!cleaned) return '';
+  const num = (parseInt(cleaned, 10) / 100).toFixed(2);
+  return num;
+}
+
+/**
+ * Converte DMS (mascarado) para decimal. Retorna null se inválido
+ */
+export function dmsToDecimal(dms: string): number | null {
+  if (!dms) return null;
+  const sign = dms.trim().startsWith('-') ? -1 : 1;
+  const nums = dms.replace(/[^0-9.]/g, ' ').trim().split(/\s+/);
+  if (nums.length < 3) return null;
+  const deg = parseFloat(nums[0]);
+  const min = parseFloat(nums[1]);
+  const sec = parseFloat(nums[2]);
+  if (Number.isNaN(deg) || Number.isNaN(min) || Number.isNaN(sec)) return null;
+  const dec = sign * (deg + min / 60 + sec / 3600);
+  return Number.isFinite(dec) ? dec : null;
+}
+
+/**
  * Detecta o tipo de documento baseado no tamanho
  * @param value - Valor sem formatação
  * @returns 'CPF', 'CNPJ' ou null
