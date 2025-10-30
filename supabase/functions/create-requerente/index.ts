@@ -77,16 +77,21 @@ serve(async (req) => {
       );
     }
 
+    console.log('Attempting to create Requerente with CPF:', cpf);
+
     // 4. Check duplicate by CPF
     const { data: existingByCPF } = await supabase
       .from('usuarios')
-      .select('cpf')
+      .select('cpf, nome, perfil')
       .eq('cpf', cpf)
       .maybeSingle();
 
     if (existingByCPF) {
+      console.log('Duplicate CPF found:', existingByCPF);
       return new Response(
-        JSON.stringify({ error: 'CPF/CNPJ já cadastrado no sistema' }),
+        JSON.stringify({ 
+          error: `CPF/CNPJ ${cpf} já cadastrado no sistema para ${existingByCPF.nome} (${existingByCPF.perfil})` 
+        }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
