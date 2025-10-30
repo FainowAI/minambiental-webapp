@@ -50,6 +50,10 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { maskCNPJ, maskDMS, maskDecimalTwoPlaces } from '@/utils/masks';
+import { validateCNPJ, validateDMS, validatePdfFile } from '@/utils/validators';
+import { createLicense, getUsuarioByCNPJ } from '@/services/licenseService';
+import { useToast } from '@/hooks/use-toast';
 import {
   Select,
   SelectContent,
@@ -59,6 +63,7 @@ import {
 } from '@/components/ui/select';
 
 interface LicenseFormData {
+  licenseNumber: string;
   cnpj: string;
   requesterName: string;
   act: string;
@@ -83,6 +88,7 @@ const CreateLicense = () => {
   const location = useLocation();
 
   const [formData, setFormData] = useState<LicenseFormData>({
+    licenseNumber: '',
     cnpj: '',
     requesterName: '',
     act: '',
@@ -90,7 +96,7 @@ const CreateLicense = () => {
     interferenceType: '',
     useFinality: '',
     municipality: '',
-    state: '',
+    state: 'MS',
     planningUnit: '',
     aquiferSystem: '',
     latitude: '',
@@ -103,6 +109,13 @@ const CreateLicense = () => {
   });
 
   const [fileName, setFileName] = useState<string>('');
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const { toast } = useToast();
+
+  // Municípios de Mato Grosso do Sul (CA 08)
+  const MS_MUNICIPIOS = [
+    'Água Clara','Alcinópolis','Amambai','Anastácio','Anaurilândia','Angélica','Antônio João','Aparecida do Taboado','Aquidauana','Aral Moreira','Bandeirantes','Bataguassu','Bataiporã','Bela Vista','Bodoquena','Bonito','Brasilândia','Caarapó','Camapuã','Campo Grande','Caracol','Cassilândia','Chapadão do Sul','Corguinho','Coronel Sapucaia','Corumbá','Costa Rica','Coxim','Deodápolis','Dois Irmãos do Buriti','Douradina','Dourados','Eldorado','Fátima do Sul','Figueirão','Glória de Dourados','Guia Lopes da Laguna','Iguatemi','Inocência','Itaporã','Itaquiraí','Ivinhema','Japorã','Jaraguari','Jardim','Jateí','Juti','Ladário','Laguna Carapã','Maracaju','Miranda','Mundo Novo','Naviraí','Nioaque','Nova Alvorada do Sul','Nova Andradina','Novo Horizonte do Sul','Paranaíba','Paranhos','Pedro Gomes','Ponta Porã','Porto Murtinho','Ribas do Rio Pardo','Rio Brilhante','Rio Negro','Rio Verde de Mato Grosso','Rochedo','Santa Rita do Pardo','São Gabriel do Oeste','Selvíria','Sete Quedas','Sidrolândia','Sonora','Tacuru','Taquarussu','Terenos','Três Lagoas','Vicentina'
+  ];
 
   // Navigation items for the sidebar
   const navItems = [
@@ -135,12 +148,72 @@ const CreateLicense = () => {
     navigate('/licenses');
   };
 
-  const handleSave = () => {
-    console.log('Salvando licença:', formData);
-    // Implementar lógica de salvamento
+  const handleSave = async () => {
+    const newErrors: Record<string, string> = {};
+    // Required checks (CA02)
+    const reqFields: (keyof LicenseFormData)[] = [
+      'licenseNumber','cnpj','requesterName','act','actObject','interferenceType','useFinality','municipality','state','planningUnit','aquiferSystem','latitude','longitude','annualVolume','validityStart','validityEnd','priority'
+    ];
+    reqFields.forEach((f) => { if (!formData[f]) newErrors[f] = 'Campo Obrigatório'; });
+
+    // CNPJ (CA03)
+    if (formData.cnpj && !validateCNPJ(formData.cnpj)) {
+      newErrors.cnpj = 'dos os municípios do Estado de Mato Grosso do Sul';
+    }
+
+    // DMS (CA07)
+    if (formData.latitude && !validateDMS(formData.latitude)) newErrors.latitude = 'Campo Obrigatório';
+    if (formData.longitude && !validateDMS(formData.longitude)) newErrors.longitude = 'Campo Obrigatório';
+
+    // PDF (CA10)
+    if (!validatePdfFile(formData.pdfFile)) newErrors.pdfFile = 'Formato inválido';
+
+    setErrors(newErrors);
+    if (Object.keys(newErrors).length > 0) return;
+
+    // Persistência
+    if (!formData.pdfFile) return;
+    await createLicense({
+      numeroLicenca: formData.licenseNumber,
+      cnpj: formData.cnpj,
+      tipoAto: formData.act,
+      objetoAto: formData.actObject,
+      tipoPontoInterferencia: formData.interferenceType,
+      finalidadeUso: formData.useFinality,
+      municipio: formData.municipality,
+      estado: formData.state,
+      unidadePlanejamento: formData.planningUnit,
+      sistemaAquifero: formData.aquiferSystem,
+      latitudeDms: formData.latitude,
+      longitudeDms: formData.longitude,
+      volumeAnual: formData.annualVolume,
+      dataInicio: formData.validityStart,
+      dataFim: formData.validityEnd,
+      prioridadeUi: formData.priority as any,
+      pdfFile: formData.pdfFile,
+    });
+    navigate('/licenses');
   };
 
   const updateFormField = (field: keyof LicenseFormData, value: string | File | null) => {
+    setErrors((e) => ({ ...e, [field as string]: '' }));
+    // Máscaras e efeitos colaterais
+    if (field === 'cnpj' && typeof value === 'string') {
+      value = maskCNPJ(value);
+    }
+    if ((field === 'latitude' || field === 'longitude') && typeof value === 'string') {
+      value = maskDMS(value);
+    }
+    if (field === 'annualVolume' && typeof value === 'string') {
+      value = maskDecimalTwoPlaces(value);
+    }
+    if (field === 'validityStart' && typeof value === 'string' && value) {
+      const start = new Date(value);
+      const end = new Date(start);
+      end.setFullYear(start.getFullYear() + 10); // CA09
+      setFormData((prev) => ({ ...prev, validityStart: value, validityEnd: end.toISOString().slice(0, 10) }));
+      return;
+    }
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -150,6 +223,28 @@ const CreateLicense = () => {
       setFileName(file.name);
       updateFormField('pdfFile', file);
     }
+  };
+
+  const handleLookupRequester = async () => {
+    if (!formData.cnpj || !validateCNPJ(formData.cnpj)) {
+      setErrors((e) => ({ ...e, cnpj: 'dos os municípios do Estado de Mato Grosso do Sul' }));
+      toast({ title: 'CNPJ inválido', description: 'Verifique o CNPJ informado.', variant: 'destructive' });
+      return;
+    }
+  try {
+    const usuario = await getUsuarioByCNPJ(formData.cnpj);
+    if (!usuario) {
+      toast({ title: 'Usuário não encontrado', description: 'Cadastre o usuário antes de prosseguir.', variant: 'destructive' });
+      return;
+    }
+    setFormData((prev) => ({
+      ...prev,
+      requesterName: usuario.nome || prev.requesterName,
+    }));
+    toast({ title: 'Usuário localizado', description: 'Nome preenchido automaticamente.' });
+  } catch (err) {
+    toast({ title: 'Erro ao buscar usuário', description: 'Tente novamente mais tarde.', variant: 'destructive' });
+  }
   };
 
   return (
@@ -342,6 +437,20 @@ const CreateLicense = () => {
                 <form className="space-y-6">
                   {/* Grid de 4 colunas */}
                   <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+                    {/* Número da Licença */}
+                    <div className="space-y-2">
+                      <Label htmlFor="licenseNumber" className="text-sm font-medium text-gray-700">
+                        Número da Licença <span className="text-red-500">*</span>
+                      </Label>
+                      <Input
+                        id="licenseNumber"
+                        placeholder="0000/AAAA"
+                        value={formData.licenseNumber}
+                        onChange={(e) => updateFormField('licenseNumber', e.target.value)}
+                        className="h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500"
+                      />
+                      {errors.licenseNumber && <p className="text-xs text-red-600">{errors.licenseNumber}</p>}
+                    </div>
                     {/* CNPJ do Requerente */}
                     <div className="space-y-2">
                       <Label htmlFor="cnpj" className="text-sm font-medium text-gray-700">
@@ -355,11 +464,13 @@ const CreateLicense = () => {
                           onChange={(e) => updateFormField('cnpj', e.target.value)}
                           className="h-11 flex-1 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500"
                         />
+                        {errors.cnpj && <p className="text-xs text-red-600">{errors.cnpj}</p>}
                         <Button
                           type="button"
                           variant="outline"
                           size="icon"
                           className="h-11 w-11 shrink-0"
+                          onClick={handleLookupRequester}
                         >
                           <Search className="h-4 w-4" />
                         </Button>
@@ -378,6 +489,7 @@ const CreateLicense = () => {
                         onChange={(e) => updateFormField('requesterName', e.target.value)}
                         className="h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500"
                       />
+                      {errors.requesterName && <p className="text-xs text-red-600">{errors.requesterName}</p>}
                     </div>
 
                     {/* Ato */}
@@ -390,11 +502,10 @@ const CreateLicense = () => {
                           <SelectValue placeholder="Selecione" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="outorga">Outorga</SelectItem>
-                          <SelectItem value="licenca">Licença</SelectItem>
-                          <SelectItem value="autorizacao">Autorização</SelectItem>
+                          <SelectItem value="Outorga de Direito de Uso de Recursos Hídricos">Outorga de Direito de Uso de Recursos Hídricos</SelectItem>
                         </SelectContent>
                       </Select>
+                      {errors.act && <p className="text-xs text-red-600">{errors.act}</p>}
                     </div>
 
                     {/* Objeto de Ato */}
@@ -407,11 +518,10 @@ const CreateLicense = () => {
                           <SelectValue placeholder="Selecione" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="captacao">Captação</SelectItem>
-                          <SelectItem value="lancamento">Lançamento</SelectItem>
-                          <SelectItem value="barragem">Barragem</SelectItem>
+                          <SelectItem value="Recursos Hídricos">Recursos Hídricos</SelectItem>
                         </SelectContent>
                       </Select>
+                      {errors.actObject && <p className="text-xs text-red-600">{errors.actObject}</p>}
                     </div>
 
                     {/* Tipo de Ponto de Interferência */}
@@ -424,11 +534,10 @@ const CreateLicense = () => {
                           <SelectValue placeholder="Selecione" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="superficial">Superficial</SelectItem>
-                          <SelectItem value="subterraneo">Subterrâneo</SelectItem>
-                          <SelectItem value="misto">Misto</SelectItem>
+                          <SelectItem value="Captação Subterrânea">Captação Subterrânea</SelectItem>
                         </SelectContent>
                       </Select>
+                      {errors.interferenceType && <p className="text-xs text-red-600">{errors.interferenceType}</p>}
                     </div>
 
                     {/* Finalidade de Uso */}
@@ -441,12 +550,10 @@ const CreateLicense = () => {
                           <SelectValue placeholder="Selecione" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="industrial">Industrial</SelectItem>
-                          <SelectItem value="irrigacao">Irrigação</SelectItem>
-                          <SelectItem value="abastecimento">Abastecimento Público</SelectItem>
-                          <SelectItem value="dessedentacao">Dessedentação Animal</SelectItem>
+                          <SelectItem value="Outras Finalidades de Uso">Outras Finalidades de Uso</SelectItem>
                         </SelectContent>
                       </Select>
+                      {errors.useFinality && <p className="text-xs text-red-600">{errors.useFinality}</p>}
                     </div>
 
                     {/* Município */}
@@ -459,12 +566,12 @@ const CreateLicense = () => {
                           <SelectValue placeholder="Selecione" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="campo-grande">Campo Grande</SelectItem>
-                          <SelectItem value="bonito">Bonito</SelectItem>
-                          <SelectItem value="aquidauana">Aquidauana</SelectItem>
-                          <SelectItem value="dourados">Dourados</SelectItem>
+                          {MS_MUNICIPIOS.map((m) => (
+                            <SelectItem key={m} value={m}>{m}</SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
+                      {errors.municipality && <p className="text-xs text-red-600">{errors.municipality}</p>}
                     </div>
 
                     {/* Estado */}
@@ -478,11 +585,9 @@ const CreateLicense = () => {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="MS">Mato Grosso do Sul</SelectItem>
-                          <SelectItem value="MT">Mato Grosso</SelectItem>
-                          <SelectItem value="SP">São Paulo</SelectItem>
-                          <SelectItem value="PR">Paraná</SelectItem>
                         </SelectContent>
                       </Select>
+                      {errors.state && <p className="text-xs text-red-600">{errors.state}</p>}
                     </div>
 
                     {/* Unidade de Planejamento e Gerenciamento */}
@@ -495,28 +600,26 @@ const CreateLicense = () => {
                           <SelectValue placeholder="Selecione" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="upg1">UPG 1 - Alto Paraguai</SelectItem>
-                          <SelectItem value="upg2">UPG 2 - Miranda</SelectItem>
-                          <SelectItem value="upg3">UPG 3 - Bodoquena</SelectItem>
+                          <SelectItem value="PARDO-XXXXX">PARDO, xxxxx</SelectItem>
                         </SelectContent>
                       </Select>
+                      {errors.planningUnit && <p className="text-xs text-red-600">{errors.planningUnit}</p>}
                     </div>
 
-                    {/* Sistema de Aquífero */}
+                    {/* Sistema Aquífero */}
                     <div className="space-y-2">
                       <Label htmlFor="aquiferSystem" className="text-sm font-medium text-gray-700">
-                        Sistema de Aquífero <span className="text-red-500">*</span>
+                        Sistema Aquífero <span className="text-red-500">*</span>
                       </Label>
                       <Select value={formData.aquiferSystem} onValueChange={(value) => updateFormField('aquiferSystem', value)}>
                         <SelectTrigger className="h-11 border-gray-300">
                           <SelectValue placeholder="Selecione" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="guarani">Guarani</SelectItem>
-                          <SelectItem value="bauru">Bauru</SelectItem>
-                          <SelectItem value="serra-geral">Serra Geral</SelectItem>
+                          <SelectItem value="Serra Geral">Serra Geral</SelectItem>
                         </SelectContent>
                       </Select>
+                      {errors.aquiferSystem && <p className="text-xs text-red-600">{errors.aquiferSystem}</p>}
                     </div>
 
                     {/* Latitude */}
@@ -531,6 +634,7 @@ const CreateLicense = () => {
                         onChange={(e) => updateFormField('latitude', e.target.value)}
                         className="h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500"
                       />
+                      {errors.latitude && <p className="text-xs text-red-600">{errors.latitude}</p>}
                     </div>
 
                     {/* Longitude */}
@@ -545,21 +649,22 @@ const CreateLicense = () => {
                         onChange={(e) => updateFormField('longitude', e.target.value)}
                         className="h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500"
                       />
+                      {errors.longitude && <p className="text-xs text-red-600">{errors.longitude}</p>}
                     </div>
 
                     {/* Volume Anual Captado */}
                     <div className="space-y-2">
                       <Label htmlFor="annualVolume" className="text-sm font-medium text-gray-700">
-                        Volume Anual Captado (L) <span className="text-red-500">*</span>
+                        Volume Anual Captado (m³) <span className="text-red-500">*</span>
                       </Label>
                       <Input
                         id="annualVolume"
-                        type="number"
                         placeholder="0"
                         value={formData.annualVolume}
                         onChange={(e) => updateFormField('annualVolume', e.target.value)}
                         className="h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500"
                       />
+                      {errors.annualVolume && <p className="text-xs text-red-600">{errors.annualVolume}</p>}
                     </div>
 
                     {/* Validade da Licença */}
@@ -582,7 +687,11 @@ const CreateLicense = () => {
                           onChange={(e) => updateFormField('validityEnd', e.target.value)}
                           className="h-11 flex-1 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500"
                         />
+                        {/* CA09: usuário pode editar a data final */}
                       </div>
+                      {(errors.validityStart || errors.validityEnd) && (
+                        <p className="text-xs text-red-600">{errors.validityStart || errors.validityEnd}</p>
+                      )}
                     </div>
 
                     {/* PDF da Licença */}
@@ -616,6 +725,7 @@ const CreateLicense = () => {
                         />
                       </div>
                       <p className="text-xs text-gray-500">Apenas arquivos PDF são aceitos</p>
+                      {errors.pdfFile && <p className="text-xs text-red-600">{errors.pdfFile}</p>}
                     </div>
 
                     {/* Prioridade */}
@@ -634,6 +744,7 @@ const CreateLicense = () => {
                           <SelectItem value="baixa">Baixa</SelectItem>
                         </SelectContent>
                       </Select>
+                      {errors.priority && <p className="text-xs text-red-600">{errors.priority}</p>}
                     </div>
                   </div>
 
