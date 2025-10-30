@@ -615,9 +615,12 @@ export type Database = {
         Row: {
           auth_user_id: string | null
           celular: string | null
+          contato_medicao_celular: string | null
+          contato_medicao_cpf: string | null
+          contato_medicao_email: string | null
           cpf: string
           created_at: string | null
-          email: string
+          email: string | null
           id: string
           nome: string
           perfil: string
@@ -631,9 +634,12 @@ export type Database = {
         Insert: {
           auth_user_id?: string | null
           celular?: string | null
+          contato_medicao_celular?: string | null
+          contato_medicao_cpf?: string | null
+          contato_medicao_email?: string | null
           cpf: string
           created_at?: string | null
-          email: string
+          email?: string | null
           id?: string
           nome: string
           perfil: string
@@ -647,9 +653,12 @@ export type Database = {
         Update: {
           auth_user_id?: string | null
           celular?: string | null
+          contato_medicao_celular?: string | null
+          contato_medicao_cpf?: string | null
+          contato_medicao_email?: string | null
           cpf?: string
           created_at?: string | null
-          email?: string
+          email?: string | null
           id?: string
           nome?: string
           perfil?: string
@@ -696,6 +705,14 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      sync_confirmed_users: {
+        Args: never
+        Returns: {
+          email: string
+          status: string
+          user_id: string
+        }[]
       }
     }
     Enums: {
