@@ -583,23 +583,6 @@ const CreateUser = () => {
                         </SelectContent>
                       </Select>
                       {errors.perfil && <p className="text-xs text-red-500">{errors.perfil}</p>}
-                      
-                      {/* Avisos condicionais */}
-                      {formData.perfil === 'Corpo Técnico' && (
-                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-2">
-                          <p className="text-sm text-blue-800">
-                            <strong>Atenção:</strong> Usuários do Corpo Técnico precisarão de aprovação do administrador. Um email com link de convite será enviado.
-                          </p>
-                        </div>
-                      )}
-                      
-                      {(formData.perfil === 'Requerente' || formData.perfil === 'Técnico') && (
-                        <div className="bg-green-50 border border-green-200 rounded-lg p-3 mt-2">
-                          <p className="text-sm text-green-800">
-                            <strong>Info:</strong> Este usuário será aprovado automaticamente e poderá acessar o sistema imediatamente.
-                          </p>
-                        </div>
-                      )}
                     </div>
 
                     {/* Campos condicionais baseados no perfil */}
