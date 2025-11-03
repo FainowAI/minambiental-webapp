@@ -22,6 +22,15 @@ const LoginModal = ({ open, onOpenChange }: LoginModalProps) => {
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  const waitForSession = async (tries = 10) => {
+    for (let i = 0; i < tries; i++) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) return true;
+      await new Promise(r => setTimeout(r, 100));
+    }
+    return false;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -72,10 +81,12 @@ const LoginModal = ({ open, onOpenChange }: LoginModalProps) => {
           
           if (usuario.status_aprovacao === 'Aprovado' && usuario.perfil === 'Corpo Técnico') {
             toast.success('Login realizado com sucesso!');
+            await waitForSession();
             onOpenChange(false);
             navigate('/home');
           } else if (usuario.status_aprovacao === 'Pendente') {
             toast.info('Seu cadastro está aguardando aprovação. Você será redirecionado para a página de status.');
+            await waitForSession();
             onOpenChange(false);
             navigate('/pending-approval');
           } else if (usuario.status_aprovacao === 'Rejeitado') {

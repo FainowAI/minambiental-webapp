@@ -60,8 +60,19 @@ export function useAuth(): UseAuthReturn {
   useEffect(() => {
     // Get initial session
     const getInitialSession = async () => {
+      setIsLoading(true);
       const { data: { session } } = await supabase.auth.getSession();
       setUser(session?.user ?? null);
+      
+      if (session?.user) {
+        await checkApprovalStatus();
+      } else {
+        setUserData(null);
+        setIsApproved(false);
+        setIsCorpoTecnico(false);
+        setIsActive(false);
+      }
+      
       setIsLoading(false);
     };
 
@@ -70,8 +81,8 @@ export function useAuth(): UseAuthReturn {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        setIsLoading(true);
         setUser(session?.user ?? null);
-        setIsLoading(false);
         
         // Check approval status when user changes
         if (session?.user) {
@@ -82,6 +93,8 @@ export function useAuth(): UseAuthReturn {
           setIsCorpoTecnico(false);
           setIsActive(false);
         }
+        
+        setIsLoading(false);
       }
     );
 

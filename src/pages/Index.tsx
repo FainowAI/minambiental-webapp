@@ -18,6 +18,15 @@ const Index = () => {
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  const waitForSession = async (tries = 10) => {
+    for (let i = 0; i < tries; i++) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) return true;
+      await new Promise(r => setTimeout(r, 100));
+    }
+    return false;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -65,6 +74,7 @@ const Index = () => {
           }
           
           toast.success('Login realizado com sucesso!');
+          await waitForSession();
           navigate('/home');
         } catch (error) {
           console.error('Error checking approval status:', error);
