@@ -22,15 +22,6 @@ const LoginModal = ({ open, onOpenChange }: LoginModalProps) => {
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const waitForSession = async (tries = 10) => {
-    for (let i = 0; i < tries; i++) {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) return true;
-      await new Promise(r => setTimeout(r, 100));
-    }
-    return false;
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -64,29 +55,20 @@ const LoginModal = ({ open, onOpenChange }: LoginModalProps) => {
 
       // Login bem-sucedido
       if (data.user) {
-        // Verificar status de aprovação e status ativo antes de redirecionar
+        // Verificar status de aprovação antes de redirecionar
         const { data: usuario } = await supabase
           .from('usuarios')
-          .select('status_aprovacao, perfil, status')
+          .select('status_aprovacao, perfil')
           .eq('auth_user_id', data.user.id)
           .single();
 
         if (usuario) {
-          // Check if account is inactive first
-          if (usuario.status === 'Inativo') {
-            toast.error('Sua conta está inativa. Entre em contato com o administrador.');
-            await supabase.auth.signOut();
-            return;
-          }
-          
           if (usuario.status_aprovacao === 'Aprovado' && usuario.perfil === 'Corpo Técnico') {
             toast.success('Login realizado com sucesso!');
-            await waitForSession();
             onOpenChange(false);
             navigate('/home');
           } else if (usuario.status_aprovacao === 'Pendente') {
             toast.info('Seu cadastro está aguardando aprovação. Você será redirecionado para a página de status.');
-            await waitForSession();
             onOpenChange(false);
             navigate('/pending-approval');
           } else if (usuario.status_aprovacao === 'Rejeitado') {

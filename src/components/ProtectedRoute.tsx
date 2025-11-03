@@ -4,14 +4,13 @@ import { useAuth } from '@/hooks/useAuth';
 import { Loader2, AlertCircle, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import PendingApproval from '@/pages/PendingApproval';
-import { supabase } from '@/integrations/supabase/client';
 
 interface ProtectedRouteProps {
   children: ReactNode;
 }
 
 const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
-  const { user, isApproved, isCorpoTecnico, isActive, isLoading } = useAuth();
+  const { user, isApproved, isCorpoTecnico, isLoading } = useAuth();
 
   // Show loading while checking auth status
   if (isLoading) {
@@ -28,33 +27,6 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
   // Redirect to login if not authenticated
   if (!user) {
     return <Navigate to="/" replace />;
-  }
-
-  // Block access if user is inactive
-  if (!isActive) {
-    // Sign out the user immediately
-    supabase.auth.signOut();
-    
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center max-w-md mx-auto p-6">
-          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <AlertCircle className="w-8 h-8 text-red-600" />
-          </div>
-          <h1 className="text-2xl font-bold text-gray-800 mb-2">Conta Inativa</h1>
-          <p className="text-gray-600 mb-6">
-            Sua conta foi desativada. Entre em contato com o administrador para mais informações.
-          </p>
-          <Button 
-            onClick={() => window.location.href = '/'}
-            variant="outline"
-            className="border-gray-300 text-gray-700 hover:bg-gray-50"
-          >
-            Voltar ao Login
-          </Button>
-        </div>
-      </div>
-    );
   }
 
   // Block access if user is not Corpo Técnico

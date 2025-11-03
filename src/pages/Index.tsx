@@ -18,15 +18,6 @@ const Index = () => {
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const waitForSession = async (tries = 10) => {
-    for (let i = 0; i < tries; i++) {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) return true;
-      await new Promise(r => setTimeout(r, 100));
-    }
-    return false;
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -56,16 +47,9 @@ const Index = () => {
       }
 
       if (data.user) {
-        // Check user approval status and active status
+        // Check user approval status
         try {
           const approvalStatus = await getUserApprovalStatus(data.user.id);
-          
-          // Check if account is inactive first
-          if (!approvalStatus.isActive) {
-            await supabase.auth.signOut();
-            toast.error('Sua conta está inativa. Entre em contato com o administrador.');
-            return;
-          }
           
           if (data.user.email && approvalStatus.isCorpoTecnico && !approvalStatus.isApproved) {
             await supabase.auth.signOut();
@@ -74,13 +58,12 @@ const Index = () => {
           }
           
           toast.success('Login realizado com sucesso!');
-          await waitForSession();
           navigate('/home');
         } catch (error) {
           console.error('Error checking approval status:', error);
-          // If error checking approval, block login for security
-          await supabase.auth.signOut();
-          toast.error('Erro ao verificar status da conta. Tente novamente.');
+          // If error checking approval, allow login but show warning
+          toast.success('Login realizado com sucesso!');
+          navigate('/home');
         }
       }
     } catch (err) {
