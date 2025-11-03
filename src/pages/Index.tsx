@@ -47,9 +47,16 @@ const Index = () => {
       }
 
       if (data.user) {
-        // Check user approval status
+        // Check user approval status and active status
         try {
           const approvalStatus = await getUserApprovalStatus(data.user.id);
+          
+          // Check if account is inactive first
+          if (!approvalStatus.isActive) {
+            await supabase.auth.signOut();
+            toast.error('Sua conta está inativa. Entre em contato com o administrador.');
+            return;
+          }
           
           if (data.user.email && approvalStatus.isCorpoTecnico && !approvalStatus.isApproved) {
             await supabase.auth.signOut();
@@ -61,9 +68,9 @@ const Index = () => {
           navigate('/home');
         } catch (error) {
           console.error('Error checking approval status:', error);
-          // If error checking approval, allow login but show warning
-          toast.success('Login realizado com sucesso!');
-          navigate('/home');
+          // If error checking approval, block login for security
+          await supabase.auth.signOut();
+          toast.error('Erro ao verificar status da conta. Tente novamente.');
         }
       }
     } catch (err) {

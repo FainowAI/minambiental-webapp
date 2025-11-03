@@ -8,6 +8,7 @@ interface UseAuthReturn {
   userData: any | null;
   isApproved: boolean;
   isCorpoTecnico: boolean;
+  isActive: boolean;
   isLoading: boolean;
   checkApprovalStatus: () => Promise<void>;
 }
@@ -17,6 +18,7 @@ export function useAuth(): UseAuthReturn {
   const [userData, setUserData] = useState<any | null>(null);
   const [isApproved, setIsApproved] = useState(false);
   const [isCorpoTecnico, setIsCorpoTecnico] = useState(false);
+  const [isActive, setIsActive] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   const checkApprovalStatus = async () => {
@@ -24,6 +26,7 @@ export function useAuth(): UseAuthReturn {
       setUserData(null);
       setIsApproved(false);
       setIsCorpoTecnico(false);
+      setIsActive(false);
       return;
     }
 
@@ -31,9 +34,10 @@ export function useAuth(): UseAuthReturn {
       const approvalStatus = await getUserApprovalStatus(user.id);
       setIsApproved(approvalStatus.isApproved);
       setIsCorpoTecnico(approvalStatus.isCorpoTecnico);
+      setIsActive(approvalStatus.isActive);
 
-      // Get full user data if approved
-      if (approvalStatus.isApproved) {
+      // Get full user data if approved and active
+      if (approvalStatus.isApproved && approvalStatus.isActive) {
         const { data } = await supabase
           .from('usuarios')
           .select('*')
@@ -48,6 +52,7 @@ export function useAuth(): UseAuthReturn {
       console.error('Error checking approval status:', error);
       setIsApproved(false);
       setIsCorpoTecnico(false);
+      setIsActive(false);
       setUserData(null);
     }
   };
@@ -75,6 +80,7 @@ export function useAuth(): UseAuthReturn {
           setUserData(null);
           setIsApproved(false);
           setIsCorpoTecnico(false);
+          setIsActive(false);
         }
       }
     );
@@ -94,6 +100,7 @@ export function useAuth(): UseAuthReturn {
     userData,
     isApproved,
     isCorpoTecnico,
+    isActive,
     isLoading,
     checkApprovalStatus,
   };

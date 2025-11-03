@@ -55,14 +55,21 @@ const LoginModal = ({ open, onOpenChange }: LoginModalProps) => {
 
       // Login bem-sucedido
       if (data.user) {
-        // Verificar status de aprovação antes de redirecionar
+        // Verificar status de aprovação e status ativo antes de redirecionar
         const { data: usuario } = await supabase
           .from('usuarios')
-          .select('status_aprovacao, perfil')
+          .select('status_aprovacao, perfil, status')
           .eq('auth_user_id', data.user.id)
           .single();
 
         if (usuario) {
+          // Check if account is inactive first
+          if (usuario.status === 'Inativo') {
+            toast.error('Sua conta está inativa. Entre em contato com o administrador.');
+            await supabase.auth.signOut();
+            return;
+          }
+          
           if (usuario.status_aprovacao === 'Aprovado' && usuario.perfil === 'Corpo Técnico') {
             toast.success('Login realizado com sucesso!');
             onOpenChange(false);

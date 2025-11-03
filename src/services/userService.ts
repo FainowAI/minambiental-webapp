@@ -18,6 +18,7 @@ export interface UserApprovalStatus {
   isApproved: boolean;
   isCorpoTecnico: boolean;
   status?: string;
+  isActive: boolean;
 }
 
 /**
@@ -146,7 +147,7 @@ export async function getUserApprovalStatus(authUserId: string): Promise<UserApp
   
   const { data, error } = await supabase
     .from('usuarios')
-    .select('perfil, status_aprovacao')
+    .select('perfil, status_aprovacao, status')
     .eq('auth_user_id', authUserId)
     .single();
 
@@ -159,13 +160,21 @@ export async function getUserApprovalStatus(authUserId: string): Promise<UserApp
 
   const isCorpoTecnico = data.perfil === 'Corpo Técnico';
   const isApproved = isCorpoTecnico && data.status_aprovacao === 'Aprovado';
+  const isActive = data.status === 'Ativo';
 
-  console.log('Approval status result:', { isCorpoTecnico, isApproved, status: data.status_aprovacao }); // Debug
+  console.log('Approval status result:', { 
+    isCorpoTecnico, 
+    isApproved, 
+    isActive,
+    status: data.status_aprovacao,
+    userStatus: data.status
+  }); // Debug
 
   return {
     isApproved,
     isCorpoTecnico,
     status: data.status_aprovacao,
+    isActive,
   };
 }
 
