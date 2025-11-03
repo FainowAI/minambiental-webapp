@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { z } from 'zod';
 import { createUserWithInvite } from '@/services/userService';
 import { createRequerente } from '@/services/requerenteService';
-import { validateCPFOrCNPJ, validateEmail, validatePhone, validateName } from '@/utils/validators';
+import { validateCPFOrCNPJ, validateEmail, validatePhone, validateName, validateCPF } from '@/utils/validators';
 import { maskCPFOrCNPJ, maskPhone } from '@/utils/masks';
 import {
   Home as HomeIcon,
@@ -165,9 +165,20 @@ const CreateUser = () => {
       if (!formData.cpf.trim()) {
         customErrors.cpf = 'Campo obrigatório';
       } else {
-        const cpfValidation = validateCPFOrCNPJ(formData.cpf);
-        if (!cpfValidation.valid) {
-          customErrors.cpf = 'Campo inválido';
+        // Se for Corpo Técnico, validar apenas como CPF
+        if (formData.perfil === 'Corpo Técnico') {
+          const cleanCPF = formData.cpf.replace(/\D/g, '');
+          if (cleanCPF.length !== 11) {
+            customErrors.cpf = 'CPF deve ter 11 dígitos';
+          } else if (!validateCPF(cleanCPF)) {
+            customErrors.cpf = 'CPF inválido';
+          }
+        } else {
+          // Para outros perfis, validar CPF ou CNPJ
+          const cpfValidation = validateCPFOrCNPJ(formData.cpf);
+          if (!cpfValidation.valid) {
+            customErrors.cpf = 'Campo inválido';
+          }
         }
       }
 
@@ -272,6 +283,16 @@ const CreateUser = () => {
     if (value) {
       updateFormField('perfil', value as 'Corpo Técnico' | 'Requerente' | 'Técnico');
       setShowFields(true);
+      
+      // Limpar CPF ao trocar para Corpo Técnico se o valor atual for CNPJ
+      if (value === 'Corpo Técnico' && formData.cpf) {
+        const cleanValue = formData.cpf.replace(/\D/g, '');
+        // Se tiver mais de 11 dígitos (é CNPJ), limpar o campo
+        if (cleanValue.length > 11) {
+          updateFormField('cpf', '');
+          setErrors(prev => ({ ...prev, cpf: '' }));
+        }
+      }
     } else {
       updateFormField('perfil', '');
       setShowFields(false);
@@ -297,6 +318,23 @@ const CreateUser = () => {
   const handleContatoPhoneChange = (value: string) => {
     const maskedValue = maskPhone(value);
     updateFormField('contato_medicao_celular', maskedValue);
+  };
+
+  // Máscara específica para CPF quando perfil for Corpo Técnico
+  const handleCPFOnlyChange = (value: string) => {
+    // Remove caracteres não numéricos
+    const cleanValue = value.replace(/\D/g, '');
+    
+    // Limita a 11 dígitos (CPF)
+    const limitedValue = cleanValue.substring(0, 11);
+    
+    // Aplica máscara de CPF
+    const maskedValue = limitedValue
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+    
+    updateFormField('cpf', maskedValue);
   };
 
   return (
@@ -591,25 +629,36 @@ const CreateUser = () => {
                           {errors.name && <p className="text-xs text-red-500">{errors.name}</p>}
                         </div>
 
-                        {/* CPF/CNPJ Input */}
+                        {/* CPF/CNPJ Input - Apenas CPF para Corpo Técnico */}
                         <div className="space-y-2">
                           <Label htmlFor="cpf" className="text-sm font-medium text-gray-700">
-                            CPF ou CNPJ <span className="text-red-500">*</span>
+                            {formData.perfil === 'Corpo Técnico' ? 'CPF' : 'CPF ou CNPJ'} <span className="text-red-500">*</span>
                           </Label>
                           <Input
                             id="cpf"
                             type="text"
-                            placeholder="000.000.000-00 ou 00.000.000/0000-00"
+                            placeholder={
+                              formData.perfil === 'Corpo Técnico' 
+                                ? '000.000.000-00' 
+                                : '000.000.000-00 ou 00.000.000/0000-00'
+                            }
                             value={formData.cpf}
-                            onChange={(e) => handleCPFChange(e.target.value)}
+                            onChange={(e) => 
+                              formData.perfil === 'Corpo Técnico' 
+                                ? handleCPFOnlyChange(e.target.value)
+                                : handleCPFChange(e.target.value)
+                            }
                             className={`h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500 ${
                               errors.cpf ? 'border-red-500' : ''
                             }`}
-                            maxLength={18}
+                            maxLength={formData.perfil === 'Corpo Técnico' ? 14 : 18}
                           />
                           {errors.cpf && <p className="text-xs text-red-500">{errors.cpf}</p>}
                           <p className="text-xs text-gray-500 mt-1">
-                            Informe apenas números, a formatação será automática
+                            {formData.perfil === 'Corpo Técnico' 
+                              ? 'Informe apenas números do CPF, a formatação será automática'
+                              : 'Informe apenas números, a formatação será automática'
+                            }
                           </p>
                         </div>
 
