@@ -424,7 +424,8 @@ const Users = () => {
               >
                 <h2 className="text-lg font-semibold text-gray-800 mb-6">Buscar Usuários</h2>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                {/* Primeira linha: CPF/CNPJ e Nome */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                   {/* CPF/CNPJ Field */}
                   <div className="space-y-2">
                     <Label htmlFor="cpfCnpj" className="text-sm font-medium text-gray-700">
@@ -456,7 +457,10 @@ const Users = () => {
                       className="h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500"
                     />
                   </div>
+                </div>
 
+                {/* Segunda linha: Perfil, Status e Status Aprovação */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                   {/* Perfil Select */}
                   <div className="space-y-2">
                     <Label htmlFor="profile" className="text-sm font-medium text-gray-700">

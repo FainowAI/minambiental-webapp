@@ -302,7 +302,7 @@ export type Database = {
             foreignKeyName: "licencas_requerente_id_fkey"
             columns: ["requerente_id"]
             isOneToOne: false
-            referencedRelation: "pessoas"
+            referencedRelation: "usuarios"
             referencedColumns: ["id"]
           },
         ]
