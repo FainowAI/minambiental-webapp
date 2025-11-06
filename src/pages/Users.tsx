@@ -617,7 +617,11 @@ const Users = () => {
                             <TableCell className="text-gray-600">{formatPhone(user.celular)}</TableCell>
                             <TableCell className="text-gray-600">{user.perfil}</TableCell>
                           <TableCell>
-                            <Badge className="bg-emerald-600 hover:bg-emerald-600 text-white">
+                            <Badge className={`${
+                              user.status_aprovacao === 'Rejeitado'
+                                ? 'bg-red-600 hover:bg-red-600'
+                                : 'bg-emerald-600 hover:bg-emerald-600'
+                            } text-white`}>
                                 {user.status || 'Ativo'}
                             </Badge>
                           </TableCell>

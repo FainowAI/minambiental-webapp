@@ -82,7 +82,6 @@ const Licenses = () => {
   const [filters, setFilters] = useState<LicenseFilters>({
     cnpj: '',
     requester: '',
-    priority: '',
     status: '',
     actType: '',
     technician: '',
@@ -130,16 +129,6 @@ const Licenses = () => {
     navigate('/');
   };
 
-  const getPriorityBadge = (priority: string) => {
-    const badges = {
-      URGENTE: 'bg-red-500 hover:bg-red-500',
-      ALTA: 'bg-red-500 hover:bg-red-500',
-      MÉDIA: 'bg-yellow-500 hover:bg-yellow-500',
-      BAIXA: 'bg-emerald-600 hover:bg-emerald-600',
-    };
-    return badges[priority as keyof typeof badges] || 'bg-gray-500';
-  };
-
   const updateFilter = (key: keyof LicenseFilters, value: string) => {
     setFilters(prev => ({ ...prev, [key]: value }));
     setCurrentPage(1);
@@ -149,7 +138,6 @@ const Licenses = () => {
     setFilters({
       cnpj: '',
       requester: '',
-      priority: '',
       status: '',
       actType: '',
       technician: '',
@@ -390,24 +378,6 @@ const Licenses = () => {
                   />
                 </div>
 
-                {/* Prioridade */}
-                <div className="space-y-2">
-                  <Label htmlFor="priority" className="text-sm font-medium text-gray-700">
-                    Prioridade
-                  </Label>
-                  <Select value={filters.priority} onValueChange={(value) => updateFilter('priority', value)}>
-                    <SelectTrigger className="h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500">
-                      <SelectValue placeholder="Selecione" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="URGENTE">Urgente</SelectItem>
-                      <SelectItem value="ALTA">Alta</SelectItem>
-                      <SelectItem value="MÉDIA">Média</SelectItem>
-                      <SelectItem value="BAIXA">Baixa</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
                 {/* Status */}
                 <div className="space-y-2">
                   <Label htmlFor="status" className="text-sm font-medium text-gray-700">
@@ -508,7 +478,6 @@ const Licenses = () => {
                       <TableHead className="font-medium text-gray-700">Requerente</TableHead>
                       <TableHead className="font-medium text-gray-700">Ato</TableHead>
                       <TableHead className="font-medium text-gray-700">Município</TableHead>
-                      <TableHead className="font-medium text-gray-700">Prioridade</TableHead>
                       <TableHead className="font-medium text-gray-700">Status</TableHead>
                       <TableHead className="text-right font-medium text-gray-700">Ações</TableHead>
                     </TableRow>
@@ -522,19 +491,18 @@ const Licenses = () => {
                           <TableCell><Skeleton className="h-4 w-40" /></TableCell>
                           <TableCell><Skeleton className="h-4 w-32" /></TableCell>
                           <TableCell><Skeleton className="h-4 w-20" /></TableCell>
-                          <TableCell><Skeleton className="h-4 w-20" /></TableCell>
                           <TableCell><Skeleton className="h-8 w-20" /></TableCell>
                         </TableRow>
                       ))
                     ) : isError ? (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center py-8 text-red-500">
+                        <TableCell colSpan={6} className="text-center py-8 text-red-500">
                           Erro ao carregar licenças. Por favor, tente novamente.
                         </TableCell>
                       </TableRow>
                     ) : licenses.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                        <TableCell colSpan={6} className="text-center py-8 text-gray-500">
                           Nenhuma licença encontrada.
                         </TableCell>
                       </TableRow>
@@ -548,11 +516,6 @@ const Licenses = () => {
                           <TableCell>{license.tipo_ato}</TableCell>
                           <TableCell>{license.municipio}</TableCell>
                           <TableCell>
-                            <Badge className={`${getPriorityBadge(license.prioridade)} text-white`}>
-                              {license.prioridade}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
                             <Badge variant={license.status === 'Ativo' ? 'default' : 'secondary'}>
                               {license.status}
                             </Badge>
@@ -564,7 +527,7 @@ const Licenses = () => {
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    onClick={() => toast.info('Funcionalidade em desenvolvimento')}
+                                    onClick={() => navigate(`/view-license/${license.id}`)}
                                     className="h-8 w-8 text-emerald-600 hover:text-emerald-700"
                                   >
                                     <Eye className="h-4 w-4" />
@@ -580,7 +543,7 @@ const Licenses = () => {
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    onClick={() => toast.info('Funcionalidade em desenvolvimento')}
+                                    onClick={() => navigate(`/edit-license/${license.id}`)}
                                     className="h-8 w-8 text-blue-600 hover:text-blue-700"
                                   >
                                     <Edit className="h-4 w-4" />

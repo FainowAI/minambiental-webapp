@@ -7,6 +7,7 @@ const LoginHero = () => {
   return (
     <>
       <LoginModal open={isLoginModalOpen} onOpenChange={setIsLoginModalOpen} />
+    
       <main className="w-full max-w-[1670px] ml-[70px] mt-[110px] max-md:max-w-full max-md:mt-10 max-md:ml-4">
       <div className="gap-5 flex max-md:flex-col max-md:items-stretch">
         <div className="w-[46%] max-md:w-full max-md:ml-0">

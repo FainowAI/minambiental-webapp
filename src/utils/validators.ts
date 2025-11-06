@@ -172,3 +172,99 @@ export function validatePdfFile(file: File | null): boolean {
   const isPdfExt = /\.pdf$/i.test(file.name);
   return isPdfMime || isPdfExt;
 }
+
+/**
+ * Validação de CEP brasileiro
+ * @param cep - CEP com ou sem formatação
+ * @returns true se o CEP for válido (8 dígitos)
+ */
+export function validateCEP(cep: string): boolean {
+  // Remove caracteres não numéricos
+  const cleanCEP = cep.replace(/\D/g, '');
+
+  // Verifica se tem exatamente 8 dígitos
+  if (cleanCEP.length !== 8) return false;
+
+  // Verifica se não é composto apenas por zeros
+  if (/^0+$/.test(cleanCEP)) return false;
+
+  return true;
+}
+
+/**
+ * Interface para retorno de validação de datas de contrato
+ */
+export interface ContractDateValidation {
+  valid: boolean;
+  errors: string[];
+}
+
+/**
+ * Valida se as datas do contrato estão dentro das regras de negócio
+ *
+ * Regras:
+ * - Data de início do contrato >= Data de início da licença
+ * - Previsão de término >= Data de início do contrato
+ * - Previsão de término <= Data de fim da licença
+ *
+ * @param dataInicio - Data de início do contrato (ISO string ou Date)
+ * @param previsaoTermino - Previsão de término do contrato (ISO string ou Date)
+ * @param licenseDataInicio - Data de início da licença (ISO string ou Date)
+ * @param licenseDataFim - Data de fim da licença (ISO string ou Date)
+ * @returns Objeto com status de validação e array de erros
+ */
+export function validateContractDates(
+  dataInicio: string | Date,
+  previsaoTermino: string | Date,
+  licenseDataInicio: string | Date,
+  licenseDataFim: string | Date
+): ContractDateValidation {
+  const errors: string[] = [];
+
+  // Converte strings para Date se necessário
+  const contractStart = typeof dataInicio === 'string' ? new Date(dataInicio) : dataInicio;
+  const contractEnd = typeof previsaoTermino === 'string' ? new Date(previsaoTermino) : previsaoTermino;
+  const licenseStart =
+    typeof licenseDataInicio === 'string' ? new Date(licenseDataInicio) : licenseDataInicio;
+  const licenseEnd =
+    typeof licenseDataFim === 'string' ? new Date(licenseDataFim) : licenseDataFim;
+
+  // Valida se todas as datas são válidas
+  if (isNaN(contractStart.getTime())) {
+    errors.push('Data de início do contrato inválida');
+  }
+  if (isNaN(contractEnd.getTime())) {
+    errors.push('Previsão de término inválida');
+  }
+  if (isNaN(licenseStart.getTime())) {
+    errors.push('Data de início da licença inválida');
+  }
+  if (isNaN(licenseEnd.getTime())) {
+    errors.push('Data de fim da licença inválida');
+  }
+
+  // Se alguma data for inválida, retorna
+  if (errors.length > 0) {
+    return { valid: false, errors };
+  }
+
+  // Regra 1: Data de início do contrato não pode ser anterior à data de início da licença
+  if (contractStart < licenseStart) {
+    errors.push('A data de início do contrato não pode ser inferior à data de início da licença.');
+  }
+
+  // Regra 2: Previsão de término não pode ser anterior à data de início do contrato
+  if (contractEnd < contractStart) {
+    errors.push('A previsão de término do contrato não pode ser inferior à data de início do contrato.');
+  }
+
+  // Regra 3: Previsão de término não pode ultrapassar a data de fim da licença
+  if (contractEnd > licenseEnd) {
+    errors.push('A previsão de término do contrato não pode ultrapassar a validade da licença.');
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+  };
+}

@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   Home as HomeIcon,
@@ -50,9 +50,9 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { maskCNPJ, maskDMS, maskDecimalTwoPlaces } from '@/utils/masks';
-import { validateCNPJ, validateDMS, validatePdfFile } from '@/utils/validators';
-import { createLicense, getUsuarioByCNPJ } from '@/services/licenseService';
+import { maskCNPJ, maskDMS, maskDecimalTwoPlaces, decimalToDMS } from '@/utils/masks';
+import { validateCNPJ } from '@/utils/validators';
+import { getLicenseById, updateLicense, getUsuarioByCNPJ } from '@/services/licenseService';
 import { useToast } from '@/hooks/use-toast';
 import {
   Select,
@@ -61,6 +61,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface LicenseFormData {
   licenseNumber: string;
@@ -82,10 +83,13 @@ interface LicenseFormData {
   pdfFile: File | null;
 }
 
-const CreateLicense = () => {
+const EditLicense = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { id } = useParams<{ id: string }>();
+  const { toast } = useToast();
 
+  const [isLoading, setIsLoading] = useState(true);
   const [formData, setFormData] = useState<LicenseFormData>({
     licenseNumber: '',
     cnpj: '',
@@ -108,7 +112,6 @@ const CreateLicense = () => {
 
   const [fileName, setFileName] = useState<string>('');
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const { toast } = useToast();
 
   // Municípios de Mato Grosso do Sul (CA 08)
   const MS_MUNICIPIOS = [
@@ -127,7 +130,7 @@ const CreateLicense = () => {
       title: 'Licenças e Contratos',
       icon: FileText,
       url: '/licenses',
-      isActive: location.pathname === '/licenses' || location.pathname === '/create-license',
+      isActive: location.pathname === '/licenses' || location.pathname.startsWith('/edit-license'),
     },
     {
       title: 'Usuários',
@@ -136,6 +139,82 @@ const CreateLicense = () => {
       isActive: location.pathname === '/users',
     },
   ];
+
+  // Load license data
+  useEffect(() => {
+    const loadLicense = async () => {
+      if (!id) {
+        toast({
+          title: 'Erro',
+          description: 'ID da licença não fornecido',
+          variant: 'destructive',
+        });
+        navigate('/licenses');
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        const license = await getLicenseById(id);
+
+        if (!license) {
+          toast({
+            title: 'Licença não encontrada',
+            description: 'A licença que você está tentando editar não existe.',
+            variant: 'destructive',
+          });
+          navigate('/licenses');
+          return;
+        }
+
+        // Convert data from database to form format
+        const latDMS = license.latitude ? decimalToDMS(license.latitude, 'lat') : '';
+        const lonDMS = license.longitude ? decimalToDMS(license.longitude, 'lon') : '';
+
+        setFormData({
+          licenseNumber: license.numero_licenca || '',
+          cnpj: maskCNPJ(license.requerente?.cpf_cnpj || ''),
+          requesterName: license.requerente?.nome_razao_social || '',
+          act: license.tipo_ato || '',
+          actObject: license.objeto_ato || '',
+          interferenceType: license.tipo_ponto_interferencia || '',
+          useFinality: license.finalidade_uso || '',
+          municipality: license.municipio || '',
+          state: license.estado || 'MS',
+          planningUnit: license.unidade_planejamento || '',
+          aquiferSystem: license.sistema_aquifero || '',
+          latitude: latDMS,
+          longitude: lonDMS,
+          annualVolume: license.volume_anual_captado
+            ? maskDecimalTwoPlaces(license.volume_anual_captado.toString())
+            : '',
+          validityStart: license.data_inicio || '',
+          validityEnd: license.data_fim || '',
+          pdfFile: null,
+        });
+
+        // Set existing PDF filename if available
+        if (license.pdf_licenca) {
+          const urlParts = license.pdf_licenca.split('/');
+          const pdfFileName = urlParts[urlParts.length - 1];
+          setFileName(pdfFileName);
+        }
+
+      } catch (error) {
+        console.error('Error loading license:', error);
+        toast({
+          title: 'Erro ao carregar licença',
+          description: 'Não foi possível carregar os dados da licença.',
+          variant: 'destructive',
+        });
+        navigate('/licenses');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadLicense();
+  }, [id, navigate, toast]);
 
   const handleLogout = () => {
     console.log('Logout clicked');
@@ -156,7 +235,6 @@ const CreateLicense = () => {
     if (!formData.municipality) newErrors.municipality = 'Campo obrigatório';
     if (!formData.validityStart) newErrors.validityStart = 'Campo obrigatório';
     if (!formData.validityEnd) newErrors.validityEnd = 'Campo obrigatório';
-    if (!formData.pdfFile) newErrors.pdfFile = 'Arquivo PDF obrigatório';
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -169,14 +247,15 @@ const CreateLicense = () => {
     }
 
     // Estado de loading
-    const loadingToastId = toast({
-      title: 'Salvando licença...',
-      description: 'Enviando dados e arquivo PDF. Aguarde.',
+    toast({
+      title: 'Atualizando licença...',
+      description: 'Salvando alterações. Aguarde.',
       duration: Infinity,
     });
 
     try {
       const payload: any = {
+        id: id!,
         numeroLicenca: formData.licenseNumber,
         cnpj: formData.cnpj,
         tipoAto: formData.act,
@@ -195,12 +274,12 @@ const CreateLicense = () => {
         pdfFile: formData.pdfFile,
       };
 
-      await createLicense(payload);
+      await updateLicense(payload);
 
       // Sucesso
       toast({
-        title: 'Licença cadastrada com sucesso!',
-        description: 'A licença foi salva e o PDF foi enviado.',
+        title: 'Licença atualizada com sucesso!',
+        description: 'As alterações foram salvas.',
       });
 
       // Redirecionar após 1.5s
@@ -210,23 +289,23 @@ const CreateLicense = () => {
 
     } catch (error: any) {
       // Tratamento de erros específicos
-      let errorMessage = 'Ocorreu um erro ao salvar a licença. Tente novamente.';
-      
+      let errorMessage = 'Ocorreu um erro ao atualizar a licença. Tente novamente.';
+
       if (error.message?.includes('Requerente não encontrado')) {
-        errorMessage = 'CNPJ não encontrado. Cadastre o requerente antes de criar a licença.';
+        errorMessage = 'CNPJ não encontrado. Cadastre o requerente antes de atualizar a licença.';
       } else if (error.message?.includes('upload')) {
         errorMessage = 'Erro ao fazer upload do PDF. Verifique o arquivo e tente novamente.';
-      } else if (error.message?.includes('criar licença')) {
+      } else if (error.message?.includes('atualizar licença')) {
         errorMessage = 'Erro ao salvar os dados da licença no banco de dados.';
       }
 
       toast({
-        title: 'Erro ao salvar',
+        title: 'Erro ao atualizar',
         description: errorMessage,
         variant: 'destructive',
       });
 
-      console.error('Error saving license:', error);
+      console.error('Error updating license:', error);
     }
   };
 
@@ -245,7 +324,7 @@ const CreateLicense = () => {
     if (field === 'validityStart' && typeof value === 'string' && value) {
       const start = new Date(value);
       const end = new Date(start);
-      end.setFullYear(start.getFullYear() + 10); // CA09
+      end.setFullYear(start.getFullYear() + 10);
       setFormData((prev) => ({ ...prev, validityStart: value, validityEnd: end.toISOString().slice(0, 10) }));
       return;
     }
@@ -262,25 +341,177 @@ const CreateLicense = () => {
 
   const handleLookupRequester = async () => {
     if (!formData.cnpj || !validateCNPJ(formData.cnpj)) {
-      setErrors((e) => ({ ...e, cnpj: 'dos os municípios do Estado de Mato Grosso do Sul' }));
+      setErrors((e) => ({ ...e, cnpj: 'CNPJ inválido' }));
       toast({ title: 'CNPJ inválido', description: 'Verifique o CNPJ informado.', variant: 'destructive' });
       return;
     }
-  try {
-    const usuario = await getUsuarioByCNPJ(formData.cnpj);
-    if (!usuario) {
-      toast({ title: 'Usuário não encontrado', description: 'Cadastre o usuário antes de prosseguir.', variant: 'destructive' });
-      return;
+    try {
+      const usuario = await getUsuarioByCNPJ(formData.cnpj);
+      if (!usuario) {
+        toast({ title: 'Usuário não encontrado', description: 'Cadastre o usuário antes de prosseguir.', variant: 'destructive' });
+        return;
+      }
+      setFormData((prev) => ({
+        ...prev,
+        requesterName: usuario.nome || prev.requesterName,
+      }));
+      toast({ title: 'Usuário localizado', description: 'Nome preenchido automaticamente.' });
+    } catch (err) {
+      toast({ title: 'Erro ao buscar usuário', description: 'Tente novamente mais tarde.', variant: 'destructive' });
     }
-    setFormData((prev) => ({
-      ...prev,
-      requesterName: usuario.nome || prev.requesterName,
-    }));
-    toast({ title: 'Usuário localizado', description: 'Nome preenchido automaticamente.' });
-  } catch (err) {
-    toast({ title: 'Erro ao buscar usuário', description: 'Tente novamente mais tarde.', variant: 'destructive' });
-  }
   };
+
+  if (isLoading) {
+    return (
+      <SidebarProvider>
+        <div className="flex min-h-screen w-full">
+          <Sidebar collapsible="icon">
+            <SidebarHeader className="border-b border-sidebar-border">
+              <div className="flex items-center gap-2 px-2 py-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 via-teal-600 to-green-700">
+                  <span className="text-lg font-bold text-white">M</span>
+                </div>
+                <div className="flex flex-col gap-0.5 leading-none">
+                  <span className="text-sm font-semibold">
+                    <span className="text-[#a5d625]">M</span>
+                    <span className="text-[#16b2e8]">i</span>
+                    <span className="text-[#61381d]">n</span>
+                    <span className="text-[#029c58]">A</span>
+                    <span className="text-[#aa7850]">m</span>
+                    <span className="text-[#212529]">b</span>
+                    <span className="text-[#cab29f]">i</span>
+                    <span className="text-[#a5d625]">e</span>
+                    <span className="text-[#16b2e8]">n</span>
+                    <span className="text-[#61381d]">t</span>
+                    <span className="text-[#029c58]">a</span>
+                    <span className="text-[#aa7850]">l</span>
+                  </span>
+                  <span className="text-xs text-sidebar-foreground/70">Monitoramento</span>
+                </div>
+              </div>
+            </SidebarHeader>
+            <SidebarContent>
+              <SidebarGroup>
+                <SidebarGroupLabel>Navegação</SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {navItems.map((item) => (
+                      <SidebarMenuItem key={item.title}>
+                        <SidebarMenuButton
+                          onClick={() => navigate(item.url)}
+                          isActive={item.isActive}
+                          tooltip={item.title}
+                          className={
+                            item.isActive
+                              ? 'bg-emerald-600 text-white hover:bg-emerald-700 hover:text-white'
+                              : ''
+                          }
+                        >
+                          <item.icon className="h-4 w-4" />
+                          <span>{item.title}</span>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            </SidebarContent>
+            <SidebarFooter className="border-t border-sidebar-border">
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <SidebarMenuButton
+                        size="lg"
+                        className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                      >
+                        <Avatar className="h-8 w-8 rounded-lg">
+                          <AvatarImage src="" alt="Usuário" />
+                          <AvatarFallback className="rounded-lg bg-emerald-600 text-white">
+                            <User className="h-4 w-4" />
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="grid flex-1 text-left text-sm leading-tight">
+                          <span className="truncate font-semibold">Usuário</span>
+                          <span className="truncate text-xs text-sidebar-foreground/70">
+                            usuario@email.com
+                          </span>
+                        </div>
+                      </SidebarMenuButton>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                      className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
+                      side="bottom"
+                      align="end"
+                      sideOffset={4}
+                    >
+                      <DropdownMenuLabel className="p-0 font-normal">
+                        <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
+                          <Avatar className="h-8 w-8 rounded-lg">
+                            <AvatarImage src="" alt="Usuário" />
+                            <AvatarFallback className="rounded-lg bg-emerald-600 text-white">
+                              <User className="h-4 w-4" />
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="grid flex-1 text-left text-sm leading-tight">
+                            <span className="truncate font-semibold">Usuário</span>
+                            <span className="truncate text-xs text-muted-foreground">
+                              usuario@email.com
+                            </span>
+                          </div>
+                        </div>
+                      </DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={handleLogout} className="cursor-pointer">
+                        <LogOut className="mr-2 h-4 w-4" />
+                        Sair
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarFooter>
+            <SidebarRail />
+          </Sidebar>
+
+          <SidebarInset>
+            <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center gap-2 border-b bg-background px-4 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
+              <div className="flex items-center gap-2">
+                <SidebarTrigger className="-ml-1" />
+                <Separator orientation="vertical" className="mr-2 h-4" />
+                <Breadcrumb>
+                  <BreadcrumbList>
+                    <BreadcrumbItem>
+                      <BreadcrumbLink
+                        onClick={() => navigate('/licenses')}
+                        className="cursor-pointer hover:text-emerald-600"
+                      >
+                        Licenças e Contratos
+                      </BreadcrumbLink>
+                    </BreadcrumbItem>
+                    <BreadcrumbSeparator />
+                    <BreadcrumbItem>
+                      <BreadcrumbPage>Editar Licença e Contrato</BreadcrumbPage>
+                    </BreadcrumbItem>
+                  </BreadcrumbList>
+                </Breadcrumb>
+              </div>
+            </header>
+
+            <main className="flex flex-1 flex-col gap-6 p-6">
+              <div className="rounded-xl border border-gray-100 bg-white p-8 shadow-md">
+                <div className="space-y-8">
+                  <Skeleton className="h-8 w-64" />
+                  <Skeleton className="h-64 w-full" />
+                  <Skeleton className="h-64 w-full" />
+                </div>
+              </div>
+            </main>
+          </SidebarInset>
+        </div>
+      </SidebarProvider>
+    );
+  }
 
   return (
     <SidebarProvider>
@@ -420,7 +651,7 @@ const CreateLicense = () => {
                   </BreadcrumbItem>
                   <BreadcrumbSeparator />
                   <BreadcrumbItem>
-                    <BreadcrumbPage>Cadastrar Licença e Contrato</BreadcrumbPage>
+                    <BreadcrumbPage>Editar Licença e Contrato</BreadcrumbPage>
                   </BreadcrumbItem>
                 </BreadcrumbList>
               </Breadcrumb>
@@ -455,10 +686,10 @@ const CreateLicense = () => {
               {/* Header */}
               <div className="rounded-t-xl bg-gradient-to-r from-emerald-50 to-teal-50 border-b border-gray-100 px-8 py-6">
                 <h2 className="text-2xl font-bold text-gray-800 md:text-3xl">
-                  Cadastrar Licença e Contrato
+                  Editar Licença e Contrato
                 </h2>
                 <p className="mt-2 text-gray-600">
-                  Preencha os dados da nova licença ambiental
+                  Atualize os dados da licença ambiental
                 </p>
               </div>
 
@@ -722,7 +953,6 @@ const CreateLicense = () => {
                           onChange={(e) => updateFormField('validityEnd', e.target.value)}
                           className="h-11 flex-1 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500"
                         />
-                        {/* CA09: usuário pode editar a data final */}
                       </div>
                       {(errors.validityStart || errors.validityEnd) && (
                         <p className="text-xs text-red-600">{errors.validityStart || errors.validityEnd}</p>
@@ -732,7 +962,7 @@ const CreateLicense = () => {
                     {/* PDF da Licença */}
                     <div className="space-y-2">
                       <Label htmlFor="pdfFile" className="text-sm font-medium text-gray-700">
-                        PDF da Licença <span className="text-red-500">*</span>
+                        PDF da Licença
                       </Label>
                       <div className="flex gap-2">
                         <Input
@@ -749,7 +979,7 @@ const CreateLicense = () => {
                           onClick={() => document.getElementById('file-upload')?.click()}
                         >
                           <Upload className="mr-2 h-4 w-4" />
-                          Selecione
+                          Alterar
                         </Button>
                         <input
                           id="file-upload"
@@ -759,7 +989,7 @@ const CreateLicense = () => {
                           onChange={handleFileChange}
                         />
                       </div>
-                      <p className="text-xs text-gray-500">Apenas arquivos PDF são aceitos</p>
+                      <p className="text-xs text-gray-500">Apenas arquivos PDF são aceitos. Deixe em branco para manter o arquivo atual.</p>
                       {errors.pdfFile && <p className="text-xs text-red-600">{errors.pdfFile}</p>}
                     </div>
 
@@ -782,7 +1012,7 @@ const CreateLicense = () => {
                       className="min-w-[120px] bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700"
                     >
                       <Save className="mr-2 h-4 w-4" />
-                      Salvar
+                      Salvar Alterações
                     </Button>
                   </div>
                 </form>
@@ -795,4 +1025,4 @@ const CreateLicense = () => {
   );
 };
 
-export default CreateLicense;
+export default EditLicense;
