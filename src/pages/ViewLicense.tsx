@@ -874,6 +874,7 @@ const ViewLicense = () => {
                               <TableHead className="font-semibold">Data Início</TableHead>
                               <TableHead className="font-semibold">Previsão Término</TableHead>
                               <TableHead className="font-semibold">Status</TableHead>
+                              <TableHead className="font-semibold text-right">Ações</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -915,6 +916,17 @@ const ViewLicense = () => {
                                   >
                                     {contract.status || 'N/A'}
                                   </Badge>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="border-emerald-600 text-emerald-600 hover:bg-emerald-50"
+                                    onClick={() => navigate(`/edit-contract/${id}/${contract.id}`)}
+                                  >
+                                    <Edit className="mr-2 h-4 w-4" />
+                                    Editar
+                                  </Button>
                                 </TableCell>
                               </TableRow>
                             ))}

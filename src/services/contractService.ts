@@ -6,6 +6,7 @@
  */
 
 import { supabase } from '@/integrations/supabase/client';
+import { maskCEP, maskCPF, maskCurrency, maskPhone } from '@/utils/masks';
 
 /**
  * Interface para dados de criação de contrato
@@ -127,6 +128,218 @@ export interface ContractData {
 }
 
 /**
+ * Interface com os valores utilizados no formulário de contrato
+ * (todos os campos em formato string para ligação com inputs)
+ */
+export interface ContractFormValues {
+  // Dados do Contrato
+  numero: string;
+  celebradoEm: string;
+  valor: string;
+  tipoContratante: 'Pessoa Física' | 'Pessoa Jurídica' | '';
+  vinculoArt: string;
+  acaoInstitucional: string;
+
+  // Endereço do Contrato
+  cepContrato: string;
+  ruaContrato: string;
+  bairroContrato: string;
+  numeroContrato: string;
+  cidadeContrato: string;
+  estadoContrato: string;
+  paisContrato: string;
+
+  // Dados da Obra/Serviço
+  cepObra: string;
+  ruaObra: string;
+  bairroObra: string;
+  numeroObra: string;
+  cidadeObra: string;
+  estadoObra: string;
+  paisObra: string;
+  coordenadas: string;
+  dataInicio: string;
+  previsaoTermino: string;
+  codigo: string;
+  finalidade: string;
+
+  // Contato para Medição
+  cpfContato: string;
+  nomeContato: string;
+  telefoneContato: string;
+  periodoMedicaoInicio: string;
+  periodoMedicaoFim: string;
+
+  // Técnico Responsável
+  cpfTecnico: string;
+  nomeTecnico: string;
+  rnp: string;
+  tituloProfissional: string;
+  registroEmpresaContratada: string;
+  registro: string;
+
+  // Observações
+  observacao: string;
+}
+
+/**
+ * Sanitiza strings para evitar salvar valores vazios como strings em branco
+ */
+function sanitizeString(value: string | undefined): string | null | undefined {
+  if (value === undefined) return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+/**
+ * Converte o payload recebido da aplicação para o formato esperado pelo banco
+ */
+function mapPayloadToDatabaseRecord(
+  payload: Partial<CreateContractPayload>
+): Record<string, any> {
+  const record: Record<string, any> = {};
+
+  const mapping: Record<keyof Partial<CreateContractPayload>, string> = {
+    numero: 'numero',
+    celebradoEm: 'celebrado_em',
+    valor: 'valor',
+    tipoContratante: 'tipo_contratante',
+    vinculoArt: 'vinculo_art',
+    acaoInstitucional: 'acao_institucional',
+    cepContrato: 'cep_contrato',
+    ruaContrato: 'rua',
+    bairroContrato: 'bairro',
+    numeroContrato: 'numero',
+    cidadeContrato: 'cidade',
+    estadoContrato: 'estado',
+    paisContrato: 'pais',
+    cepObra: 'cep_obra',
+    ruaObra: 'rua_obra',
+    bairroObra: 'bairro_obra',
+    numeroObra: 'numero_obra',
+    cidadeObra: 'cidade_obra',
+    estadoObra: 'estado_obra',
+    paisObra: 'pais_obra',
+    coordenadas: 'coordenada',
+    dataInicio: 'data_inicio',
+    previsaoTermino: 'previsao_termino',
+    codigo: 'codigo',
+    finalidade: 'finalidade',
+    cpfContato: 'cpf_contato',
+    nomeContato: 'nome_contato',
+    telefoneContato: 'telefone_contato',
+    periodoMedicaoInicio: 'periodo_medicao_inicio',
+    periodoMedicaoFim: 'periodo_medicao_fim',
+    cpfTecnico: 'cpf_tecnico',
+    nomeTecnico: 'nome_tecnico',
+    rnp: 'rnp',
+    tituloProfissional: 'titulo_profissional',
+    registroEmpresaContratada: 'registro_empresa_contratada',
+    registro: 'registro',
+    observacao: 'observacao',
+  };
+
+  (Object.keys(mapping) as Array<keyof typeof mapping>).forEach((key) => {
+    const column = mapping[key];
+    const value = payload[key];
+
+    if (value === undefined) {
+      return;
+    }
+
+    if (typeof value === 'string') {
+      if (column === 'valor') {
+        // valor é tratado como number, portanto ignora branch string
+        record[column] = value;
+        return;
+      }
+
+      const sanitized = sanitizeString(value);
+      record[column] = sanitized ?? null;
+      return;
+    }
+
+    record[column] = value;
+  });
+
+  // Sempre que atualizarmos, atualiza coluna updated_at
+  record.updated_at = new Date().toISOString();
+
+  return record;
+}
+
+/**
+ * Converte datas em formato ISO para o padrão aceito por inputs "date" (yyyy-MM-dd)
+ */
+function formatDateForInput(dateString: string | null): string {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toISOString().split('T')[0];
+}
+
+/**
+ * Formata número monetário do banco para máscara utilizada no formulário
+ */
+function formatCurrencyFromNumber(value: number | null): string {
+  if (value === null || value === undefined) {
+    return '';
+  }
+  const cents = Math.round(value * 100);
+  return maskCurrency(String(cents));
+}
+
+/**
+ * Mapeia dados do banco para o formato consumido pelo formulário
+ */
+export function mapContractDataToFormValues(contract: ContractData): ContractFormValues {
+  return {
+    numero: contract.numero ?? '',
+    celebradoEm: formatDateForInput(contract.celebrado_em),
+    valor: formatCurrencyFromNumber(contract.valor),
+    tipoContratante: (contract.tipo_contratante as ContractFormValues['tipoContratante']) || '',
+    vinculoArt: contract.vinculo_art ?? '',
+    acaoInstitucional: contract.acao_institucional ?? '',
+
+    cepContrato: maskCEP(contract.cep_contrato ?? ''),
+    ruaContrato: contract.rua ?? '',
+    bairroContrato: contract.bairro ?? '',
+    numeroContrato: contract.numero ?? '',
+    cidadeContrato: contract.cidade ?? '',
+    estadoContrato: contract.estado ?? '',
+    paisContrato: contract.pais ?? '',
+
+    cepObra: maskCEP(contract.cep_obra ?? ''),
+    ruaObra: contract.rua_obra ?? '',
+    bairroObra: contract.bairro_obra ?? '',
+    numeroObra: contract.numero_obra ?? '',
+    cidadeObra: contract.cidade_obra ?? '',
+    estadoObra: contract.estado_obra ?? '',
+    paisObra: contract.pais_obra ?? '',
+    coordenadas: contract.coordenada ?? '',
+    dataInicio: formatDateForInput(contract.data_inicio),
+    previsaoTermino: formatDateForInput(contract.previsao_termino),
+    codigo: contract.codigo ?? '',
+    finalidade: contract.finalidade ?? '',
+
+    cpfContato: maskCPF(contract.cpf_contato ?? ''),
+    nomeContato: contract.nome_contato ?? '',
+    telefoneContato: maskPhone(contract.telefone_contato ?? ''),
+    periodoMedicaoInicio: formatDateForInput(contract.periodo_medicao_inicio),
+    periodoMedicaoFim: formatDateForInput(contract.periodo_medicao_fim),
+
+    cpfTecnico: maskCPF(contract.cpf_tecnico ?? ''),
+    nomeTecnico: contract.nome_tecnico ?? '',
+    rnp: contract.rnp ?? '',
+    tituloProfissional: contract.titulo_profissional ?? '',
+    registroEmpresaContratada: contract.registro_empresa_contratada ?? '',
+    registro: contract.registro ?? '',
+
+    observacao: contract.observacao ?? '',
+  };
+}
+
+/**
  * Cria um novo contrato vinculado a uma licença
  *
  * @param payload - Dados do contrato a ser criado
@@ -137,61 +350,9 @@ export async function createContract(
   payload: CreateContractPayload
 ): Promise<ContractData> {
   try {
-    // Mapeia payload para formato do banco de dados
     const contractData = {
-      // Dados do Contrato
-      numero: payload.numero,
-      celebrado_em: payload.celebradoEm,
-      valor: payload.valor,
-      tipo_contratante: payload.tipoContratante,
-      vinculo_art: payload.vinculoArt || null,
-      acao_institucional: payload.acaoInstitucional || null,
-
-      // Endereço do Contrato
-      cep_contrato: payload.cepContrato,
-      rua: payload.ruaContrato,
-      bairro: payload.bairroContrato,
-      numero: payload.numeroContrato,
-      cidade: payload.cidadeContrato,
-      estado: payload.estadoContrato,
-      pais: payload.paisContrato,
-
-      // Dados da Obra/Serviço
-      cep_obra: payload.cepObra,
-      rua_obra: payload.ruaObra,
-      bairro_obra: payload.bairroObra,
-      numero_obra: payload.numeroObra,
-      cidade_obra: payload.cidadeObra,
-      estado_obra: payload.estadoObra,
-      pais_obra: payload.paisObra,
-      coordenada: payload.coordenadas,
-      data_inicio: payload.dataInicio,
-      previsao_termino: payload.previsaoTermino,
-      codigo: payload.codigo || null,
-      finalidade: payload.finalidade,
-
-      // Contato para Medição
-      cpf_contato: payload.cpfContato,
-      nome_contato: payload.nomeContato,
-      telefone_contato: payload.telefoneContato,
-      periodo_medicao_inicio: payload.periodoMedicaoInicio,
-      periodo_medicao_fim: payload.periodoMedicaoFim,
-
-      // Técnico Responsável
-      cpf_tecnico: payload.cpfTecnico,
-      nome_tecnico: payload.nomeTecnico,
-      rnp: payload.rnp,
-      titulo_profissional: payload.tituloProfissional,
-      registro_empresa_contratada: payload.registroEmpresaContratada,
-      registro: payload.registro,
-
-      // Observações
-      observacao: payload.observacao || null,
-
-      // Status padrão
+      ...mapPayloadToDatabaseRecord(payload),
       status: 'Ativo',
-
-      // Foreign Key
       licenca_id: payload.licencaId,
     };
 
@@ -293,20 +454,11 @@ export async function updateContract(
   payload: Partial<CreateContractPayload>
 ): Promise<ContractData> {
   try {
-    // Mapeia payload para formato do banco de dados
-    const updates: any = {};
+    const updates = mapPayloadToDatabaseRecord(payload);
 
-    if (payload.numero) updates.numero = payload.numero;
-    if (payload.celebradoEm) updates.celebrado_em = payload.celebradoEm;
-    if (payload.valor !== undefined) updates.valor = payload.valor;
-    if (payload.tipoContratante)
-      updates.tipo_contratante = payload.tipoContratante;
-    if (payload.vinculoArt !== undefined)
-      updates.vinculo_art = payload.vinculoArt;
-    if (payload.acaoInstitucional !== undefined)
-      updates.acao_institucional = payload.acaoInstitucional;
-
-    // Adicione mapeamentos para outros campos conforme necessário...
+    if (Object.keys(updates).length === 0) {
+      throw new Error('Nenhum campo informado para atualização do contrato.');
+    }
 
     const { data, error } = await supabase
       .from('contratos')
