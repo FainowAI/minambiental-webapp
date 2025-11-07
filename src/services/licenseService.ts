@@ -13,6 +13,7 @@ export interface LicenseFilters {
 }
 
 type LicenseRequerente = {
+  id: string;
   cpf_cnpj: string;
   nome_razao_social: string;
 };
@@ -59,6 +60,7 @@ export const getLicenses = async (
         data_inicio,
         data_fim,
         usuarios:requerente_id (
+          id,
           cpf,
           nome
         )
@@ -113,6 +115,7 @@ export const getLicenses = async (
     const transformedData = (data || []).map((license: any) => ({
       ...license,
       requerente: license.usuarios ? {
+        id: license.usuarios.id,
         cpf_cnpj: license.usuarios.cpf,
         nome_razao_social: license.usuarios.nome
       } : null
@@ -270,6 +273,7 @@ export const getLicenseById = async (id: string): Promise<LicenseDetails | null>
       status,
       pdf_licenca,
       usuarios:requerente_id (
+        id,
         cpf,
         nome,
         email
@@ -307,6 +311,7 @@ export const getLicenseById = async (id: string): Promise<LicenseDetails | null>
     pdf_licenca: data.pdf_licenca,
     requerente: data.usuarios
       ? {
+          id: data.usuarios.id,
           cpf_cnpj: data.usuarios.cpf,
           nome_razao_social: data.usuarios.nome,
           email: data.usuarios.email,

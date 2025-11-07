@@ -58,6 +58,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { getContractById, mapContractDataToFormValues, type ContractFormValues } from '@/services/contractService';
 import { getLicenseById } from '@/services/licenseService';
+import { generateMonitoringReport } from '@/services/reportService';
 import { maskCPF, maskPhone, maskCurrency, maskCEP } from '@/utils/masks';
 
 // Import modals (to be created)
@@ -860,15 +861,31 @@ const ViewContract = () => {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <Button
-                        onClick={handleGenerateReport}
-                        disabled
-                        className="h-14 justify-start gap-3 bg-gray-100 text-gray-400 cursor-not-allowed"
-                        title="Função será implementada em breve"
+                        onClick={async () => {
+                          if (!contractId) return;
+                          
+                          try {
+                            const contract = await getContractById(contractId);
+                            await generateMonitoringReport([contract.licenca_id]);
+                            toast({
+                              title: 'Relatório gerado com sucesso!',
+                              description: 'O arquivo Excel foi baixado.',
+                            });
+                          } catch (error: any) {
+                            console.error('Erro ao gerar relatório:', error);
+                            toast({
+                              title: 'Erro ao gerar relatório',
+                              description: error.message || 'Tente novamente mais tarde.',
+                              variant: 'destructive',
+                            });
+                          }
+                        }}
+                        className="h-14 justify-start gap-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700"
                       >
                         <FileBarChart className="h-5 w-5" />
                         <div className="text-left">
                           <div className="font-semibold">Gerar Relatório de Monitoramento</div>
-                          <div className="text-xs">Em desenvolvimento</div>
+                          <div className="text-xs opacity-90">Exportar para Excel</div>
                         </div>
                       </Button>
 
