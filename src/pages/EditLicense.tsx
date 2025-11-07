@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { useFormAutosave } from '@/hooks/useFormAutosave';
+import { useUnsavedChangesPrompt } from '@/hooks/useUnsavedChangesPrompt';
 import {
   Home as HomeIcon,
   FileText,
@@ -112,6 +114,29 @@ const EditLicense = () => {
 
   const [fileName, setFileName] = useState<string>('');
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [initialDataLoaded, setInitialDataLoaded] = useState(false);
+
+  // Autosave hook
+  const autosaveKey = `edit_license_draft_${id}`;
+  const { restoreDraft, clearDraft } = useFormAutosave(autosaveKey, formData, {
+    enabled: initialDataLoaded, // Só ativa após carregar dados iniciais
+    debounceMs: 400,
+  });
+
+  // Função para verificar se há alterações
+  const isDirty = () => {
+    return initialDataLoaded && (
+      formData.licenseNumber.trim() !== '' ||
+      formData.act.trim() !== '' ||
+      formData.actObject.trim() !== ''
+    );
+  };
+
+  // Aviso de alterações não salvas
+  useUnsavedChangesPrompt({
+    when: isDirty(),
+    message: 'Você tem alterações não salvas. Deseja realmente sair?',
+  });
 
   // Municípios de Mato Grosso do Sul (CA 08)
   const MS_MUNICIPIOS = [
@@ -200,6 +225,18 @@ const EditLicense = () => {
           setFileName(pdfFileName);
         }
 
+        setInitialDataLoaded(true);
+
+        // Restaurar rascunho se houver
+        const draft = restoreDraft();
+        if (draft) {
+          setFormData({ ...draft, pdfFile: null }); // Não restaurar arquivo
+          toast({
+            title: 'Rascunho restaurado',
+            description: 'Alterações não salvas foram recuperadas.',
+          });
+        }
+
       } catch (error) {
         console.error('Error loading license:', error);
         toast({
@@ -222,6 +259,7 @@ const EditLicense = () => {
   };
 
   const handleCancel = () => {
+    clearDraft();
     navigate('/licenses');
   };
 
@@ -277,6 +315,7 @@ const EditLicense = () => {
       await updateLicense(payload);
 
       // Sucesso
+      clearDraft();
       toast({
         title: 'Licença atualizada com sucesso!',
         description: 'As alterações foram salvas.',

@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
+import { useFormAutosave } from '@/hooks/useFormAutosave';
+import { useUnsavedChangesPrompt } from '@/hooks/useUnsavedChangesPrompt';
 import { getUserById, updateUser } from '@/services/userService';
 import { validateCPFOrCNPJ, validateEmail, validatePhone, validateName } from '@/utils/validators';
 import { maskCPFOrCNPJ, maskPhone } from '@/utils/masks';
@@ -93,6 +95,30 @@ const EditUser = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [initialDataLoaded, setInitialDataLoaded] = useState(false);
+
+  // Autosave hook
+  const autosaveKey = `edit_user_draft_${id}`;
+  const { restoreDraft, clearDraft } = useFormAutosave(autosaveKey, formData, {
+    enabled: initialDataLoaded, // Só ativa após carregar dados iniciais
+    debounceMs: 400,
+  });
+
+  // Função para verificar se há alterações
+  const isDirty = () => {
+    return initialDataLoaded && (
+      formData.name.trim() !== '' ||
+      formData.cpf.trim() !== '' ||
+      formData.email.trim() !== '' ||
+      formData.phone.trim() !== ''
+    );
+  };
+
+  // Aviso de alterações não salvas
+  useUnsavedChangesPrompt({
+    when: isDirty(),
+    message: 'Você tem alterações não salvas. Deseja realmente sair?',
+  });
 
   // Navigation items for the sidebar
   const navItems = [
@@ -122,6 +148,7 @@ const EditUser = () => {
   };
 
   const handleCancel = () => {
+    clearDraft();
     navigate('/users');
   };
 
@@ -149,6 +176,17 @@ const EditUser = () => {
           contato_medicao_email: userDataAny.contato_medicao_email || '',
           contato_medicao_celular: maskPhone(userDataAny.contato_medicao_celular || ''),
         });
+
+        setInitialDataLoaded(true);
+
+        // Restaurar rascunho se houver
+        const draft = restoreDraft();
+        if (draft) {
+          setFormData(draft);
+          toast.info('Rascunho restaurado', {
+            duration: 3000,
+          });
+        }
       } catch (error) {
         toast.error('Erro ao carregar dados do usuário');
         console.error('Error loading user:', error);
@@ -257,6 +295,7 @@ const EditUser = () => {
 
       await updateUser(id!, userData);
 
+      clearDraft();
       toast.success('Usuário atualizado com sucesso');
       navigate('/users');
 
