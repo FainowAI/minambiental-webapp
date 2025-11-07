@@ -100,6 +100,8 @@ const Licenses = () => {
     queryKey: ['licenses', filters, currentPage, itemsPerPage],
     queryFn: () => getLicenses(filters, currentPage, itemsPerPage),
     staleTime: 30000, // 30 seconds
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
   const licenses = licensesData?.data || [];

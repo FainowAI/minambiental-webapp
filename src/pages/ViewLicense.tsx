@@ -149,6 +149,8 @@ const ViewLicense = () => {
     queryFn: () => getContractsByLicenseId(id!),
     enabled: !!id, // Only run query if id exists
     staleTime: 30000, // Consider data fresh for 30 seconds
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
   // Load license data

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -7,6 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { useFormAutosave } from '@/hooks/useFormAutosave';
 import {
   Select,
   SelectContent,
@@ -62,7 +63,13 @@ const NDNEModal = ({ isOpen, onClose, contractId }: NDNEModalProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [openTecnicoCombobox, setOpenTecnicoCombobox] = useState(false);
 
-  // Buscar técnicos aprovados ao abrir o modal
+  // Autosave hook
+  const autosaveKey = useMemo(() => `ndne_draft_${contractId}`, [contractId]);
+  const { restoreDraft, clearDraft } = useFormAutosave(autosaveKey, formData, {
+    enabled: isOpen,
+  });
+
+  // Buscar técnicos aprovados e restaurar rascunho ao abrir o modal
   useEffect(() => {
     const fetchTecnicos = async () => {
       if (!isOpen) return;
@@ -78,6 +85,16 @@ const NDNEModal = ({ isOpen, onClose, contractId }: NDNEModalProps) => {
 
         if (error) throw error;
         setTecnicos(data || []);
+
+        // Tentar restaurar rascunho
+        const draft = restoreDraft();
+        if (draft) {
+          setFormData(draft);
+          toast({
+            title: 'Rascunho restaurado',
+            description: 'Os dados do formulário foram recuperados.',
+          });
+        }
       } catch (error) {
         console.error('Erro ao buscar técnicos:', error);
         toast({
@@ -91,7 +108,7 @@ const NDNEModal = ({ isOpen, onClose, contractId }: NDNEModalProps) => {
     };
 
     fetchTecnicos();
-  }, [isOpen, toast]);
+  }, [isOpen, toast, restoreDraft]);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -181,6 +198,7 @@ const NDNEModal = ({ isOpen, onClose, contractId }: NDNEModalProps) => {
         description: `ND: ${formData.nd}m | NE: ${formData.ne}m | Período: ${formData.periodo === 'seca' ? 'Seca' : 'Chuva'}`,
       });
 
+      clearDraft();
       handleClose();
     } catch (error: any) {
       console.error('Erro ao salvar ND/NE:', error);

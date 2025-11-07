@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -7,6 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { useFormAutosave } from '@/hooks/useFormAutosave';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -38,6 +39,26 @@ const MeterReadingModal = ({ isOpen, onClose, contractId }: MeterReadingModalPro
 
   const [images, setImages] = useState<ImageData[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Autosave hook
+  const autosaveKey = useMemo(() => `meter_draft_${contractId}`, [contractId]);
+  const { restoreDraft, clearDraft } = useFormAutosave(autosaveKey, formData, {
+    enabled: isOpen,
+  });
+
+  // Restaurar rascunho ao abrir o modal
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const draft = restoreDraft();
+    if (draft) {
+      setFormData(draft);
+      toast({
+        title: 'Rascunho restaurado',
+        description: 'Os dados do formulário foram recuperados.',
+      });
+    }
+  }, [isOpen, restoreDraft, toast]);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -156,6 +177,8 @@ const MeterReadingModal = ({ isOpen, onClose, contractId }: MeterReadingModalPro
       variant: 'default',
     });
 
+    // Limpar rascunho
+    clearDraft();
     handleClose();
   };
 
@@ -165,6 +188,7 @@ const MeterReadingModal = ({ isOpen, onClose, contractId }: MeterReadingModalPro
       description: 'Uma solicitação de nova medição foi enviada.',
       variant: 'default',
     });
+    clearDraft();
     handleClose();
   };
 
