@@ -14,12 +14,26 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Droplets } from 'lucide-react';
+import { Droplets, ChevronsUpDown, Check } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { cn } from '@/lib/utils';
 
 interface NDNEModalProps {
   isOpen: boolean;
@@ -46,6 +60,7 @@ const NDNEModal = ({ isOpen, onClose, contractId }: NDNEModalProps) => {
   const [tecnicos, setTecnicos] = useState<Tecnico[]>([]);
   const [loadingTecnicos, setLoadingTecnicos] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [openTecnicoCombobox, setOpenTecnicoCombobox] = useState(false);
 
   // Buscar técnicos aprovados ao abrir o modal
   useEffect(() => {
@@ -234,31 +249,64 @@ const NDNEModal = ({ isOpen, onClose, contractId }: NDNEModalProps) => {
               )}
             </div>
 
-            {/* Dropdown Técnico */}
+            {/* Dropdown Técnico com Busca */}
             <div className="space-y-2">
               <Label htmlFor="tecnico" className="text-sm font-medium">
                 Técnico *
               </Label>
-              <Select
-                value={formData.tecnicoId}
-                onValueChange={(value) => handleInputChange('tecnicoId', value)}
-                disabled={loadingTecnicos}
-              >
-                <SelectTrigger
-                  className={`h-11 ${errors.tecnicoId ? 'border-red-500' : ''}`}
-                >
-                  <SelectValue
-                    placeholder={loadingTecnicos ? 'Carregando...' : 'Selecione'}
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {tecnicos.map((tecnico) => (
-                    <SelectItem key={tecnico.id} value={tecnico.id}>
-                      {tecnico.nome}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={openTecnicoCombobox} onOpenChange={setOpenTecnicoCombobox}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={openTecnicoCombobox}
+                    className={cn(
+                      'h-11 w-full justify-between',
+                      errors.tecnicoId && 'border-red-500',
+                      !formData.tecnicoId && 'text-muted-foreground'
+                    )}
+                    disabled={loadingTecnicos}
+                  >
+                    {loadingTecnicos
+                      ? 'Carregando...'
+                      : formData.tecnicoId
+                      ? tecnicos.find((t) => t.id === formData.tecnicoId)?.nome
+                      : 'Selecione'}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0 bg-popover z-50" align="start">
+                  <Command className="bg-popover">
+                    <CommandInput placeholder="Pesquisar técnico..." className="h-9" />
+                    <CommandList className="bg-popover">
+                      <CommandEmpty>Nenhum técnico encontrado.</CommandEmpty>
+                      <CommandGroup className="bg-popover">
+                        {tecnicos.map((tecnico) => (
+                          <CommandItem
+                            key={tecnico.id}
+                            value={tecnico.nome}
+                            onSelect={() => {
+                              handleInputChange('tecnicoId', tecnico.id);
+                              setOpenTecnicoCombobox(false);
+                            }}
+                            className="bg-popover hover:bg-accent"
+                          >
+                            <Check
+                              className={cn(
+                                'mr-2 h-4 w-4',
+                                formData.tecnicoId === tecnico.id
+                                  ? 'opacity-100'
+                                  : 'opacity-0'
+                              )}
+                            />
+                            {tecnico.nome}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
               {errors.tecnicoId && (
                 <p className="text-xs text-red-500">{errors.tecnicoId}</p>
               )}
