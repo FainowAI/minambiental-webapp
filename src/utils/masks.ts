@@ -135,6 +135,24 @@ export function dmsToDecimal(dms: string): number | null {
 }
 
 /**
+ * Converte decimal para DMS (graus, minutos, segundos)
+ * @param decimal - Valor decimal da coordenada
+ * @param type - Tipo de coordenada ('lat' para latitude, 'lon' para longitude)
+ * @returns String formatada em DMS
+ */
+export function decimalToDMS(decimal: number, type: 'lat' | 'lon'): string {
+  const absolute = Math.abs(decimal);
+  const degrees = Math.floor(absolute);
+  const minutesNotTruncated = (absolute - degrees) * 60;
+  const minutes = Math.floor(minutesNotTruncated);
+  const seconds = ((minutesNotTruncated - minutes) * 60).toFixed(2);
+
+  const sign = decimal < 0 ? '-' : '';
+
+  return `${sign}${degrees}° ${minutes}' ${seconds}`;
+}
+
+/**
  * Detecta o tipo de documento baseado no tamanho
  * @param value - Valor sem formatação
  * @returns 'CPF', 'CNPJ' ou null
@@ -154,7 +172,7 @@ export function detectDocumentType(value: string): 'CPF' | 'CNPJ' | null {
  */
 export function formatDocument(value: string): string {
   const type = detectDocumentType(value);
-  
+
   switch (type) {
     case 'CPF':
       return maskCPF(value);
@@ -163,4 +181,51 @@ export function formatDocument(value: string): string {
     default:
       return value;
   }
+}
+
+/**
+ * Aplica máscara de CEP brasileiro
+ * @param value - Valor sem formatação
+ * @returns Valor formatado como CEP (00000-000)
+ */
+export function maskCEP(value: string): string {
+  // Remove caracteres não numéricos
+  const cleanValue = value.replace(/\D/g, '');
+
+  // Limita a 8 dígitos
+  const limitedValue = cleanValue.substring(0, 8);
+
+  // Aplica a máscara
+  return limitedValue.replace(/(\d{5})(\d{1,3})$/, '$1-$2');
+}
+
+/**
+ * Aplica máscara de valor monetário brasileiro (R$)
+ * @param value - Valor sem formatação
+ * @returns Valor formatado como moeda (R$ 1.234,56)
+ */
+export function maskCurrency(value: string): string {
+  // Remove tudo que não é dígito
+  const cleanValue = value.replace(/\D/g, '');
+
+  if (!cleanValue) return '';
+
+  // Converte para número com centavos
+  const numberValue = parseFloat(cleanValue) / 100;
+
+  // Formata como moeda brasileira
+  return numberValue.toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+/**
+ * Remove formatação de moeda e retorna valor numérico
+ * @param value - Valor formatado como moeda
+ * @returns Valor numérico
+ */
+export function unmaskCurrency(value: string): number {
+  const cleanValue = value.replace(/\D/g, '');
+  return cleanValue ? parseFloat(cleanValue) / 100 : 0;
 }

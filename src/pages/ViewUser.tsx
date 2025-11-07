@@ -73,6 +73,7 @@ interface UserData {
   celular: string;
   perfil: 'Corpo Técnico' | 'Requerente' | 'Técnico';
   status: string;
+  status_aprovacao: string;
   // Campos de contato para medição (Requerente)
   contato_medicao_cpf?: string;
   contato_medicao_email?: string;
@@ -142,6 +143,7 @@ const ViewUser = () => {
         setUserData({
           ...user,
           perfil: user.perfil as 'Corpo Técnico' | 'Requerente' | 'Técnico',
+          status_aprovacao: userAny.status_aprovacao || '',
           contato_medicao_cpf: userAny.contato_medicao_cpf,
           contato_medicao_email: userAny.contato_medicao_email,
           contato_medicao_celular: userAny.contato_medicao_celular,
@@ -194,6 +196,7 @@ const ViewUser = () => {
       setUserData({
         ...userData,
         status: 'Inativo',
+        status_aprovacao: 'Rejeitado',
       });
 
       // CA 02 (Inativação): Mensagem de sucesso
@@ -219,6 +222,7 @@ const ViewUser = () => {
       setUserData({
         ...userData,
         status: 'Ativo',
+        status_aprovacao: 'Aprovado',
       });
 
       // CA 02 (Ativação): Mensagem de sucesso

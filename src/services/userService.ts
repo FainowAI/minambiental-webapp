@@ -353,11 +353,13 @@ export async function hasActiveContracts(userId: string): Promise<boolean> {
  */
 export async function toggleUserStatus(userId: string, currentStatus: string): Promise<void> {
   const newStatus = currentStatus === 'Ativo' ? 'Inativo' : 'Ativo';
+  const newStatusAprovacao = currentStatus === 'Ativo' ? 'Rejeitado' : 'Aprovado';
 
   const { error } = await supabase
     .from('usuarios')
     .update({
       status: newStatus,
+      status_aprovacao: newStatusAprovacao,
       updated_at: new Date().toISOString()
     })
     .eq('id', userId);
