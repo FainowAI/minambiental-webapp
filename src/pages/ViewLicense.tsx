@@ -934,7 +934,7 @@ const ViewLicense = () => {
 
                         <Button
                           onClick={() => setIsAnalysisModalOpen(true)}
-                          className="h-12 justify-start gap-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-700 hover:to-blue-800"
+                          className="h-12 justify-start gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700"
                         >
                           <Beaker className="h-5 w-5 flex-shrink-0" />
                           <div className="text-left">
@@ -945,7 +945,7 @@ const ViewLicense = () => {
 
                         <Button
                           onClick={() => setIsNDNEModalOpen(true)}
-                          className="h-12 justify-start gap-2 bg-gradient-to-r from-cyan-600 to-cyan-700 text-white hover:from-cyan-700 hover:to-cyan-800"
+                          className="h-12 justify-start gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700"
                         >
                           <Droplets className="h-5 w-5 flex-shrink-0" />
                           <div className="text-left">
@@ -956,7 +956,7 @@ const ViewLicense = () => {
 
                         <Button
                           onClick={() => setIsMeterModalOpen(true)}
-                          className="h-12 justify-start gap-2 bg-gradient-to-r from-purple-600 to-purple-700 text-white hover:from-purple-700 hover:to-purple-800"
+                          className="h-12 justify-start gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700"
                         >
                           <Gauge className="h-5 w-5 flex-shrink-0" />
                           <div className="text-left">
