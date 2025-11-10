@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -15,6 +15,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Gauge, Upload, Eye, X, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { checkRequerenteReading, type RequerenteReading } from '@/services/monitoringService';
+import { createNotificationForRequerente } from '@/services/notificationService';
 
 interface MeterReadingModalProps {
   isOpen: boolean;
@@ -41,18 +43,23 @@ const MeterReadingModal = ({ isOpen, onClose, contractId }: MeterReadingModalPro
   });
 
   const [images, setImages] = useState<ImageData[]>([]);
+  const [requerenteImages, setRequerenteImages] = useState<string[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingData, setIsLoadingData] = useState(false);
   const [licenseId, setLicenseId] = useState<string | null>(null);
+  const [requerenteReading, setRequerenteReading] = useState<RequerenteReading | null>(null);
+  const [requerenteReadingId, setRequerenteReadingId] = useState<string | null>(null);
   const [previousReading, setPreviousReading] = useState<{
     hidrometro: number | null;
     horimetro: number | null;
   } | null>(null);
 
-  // Buscar licenca_id do contrato e leitura anterior
+  // Buscar licenca_id do contrato, leitura do requerente e leitura anterior
   useEffect(() => {
     if (isOpen && contractId) {
       const fetchContractData = async () => {
+        setIsLoadingData(true);
         try {
           // Buscar licenca_id do contrato
           const { data: contract, error: contractError } = await supabase
@@ -63,13 +70,52 @@ const MeterReadingModal = ({ isOpen, onClose, contractId }: MeterReadingModalPro
 
           if (contractError) {
             console.error('Error fetching contract:', contractError);
+            setIsLoadingData(false);
             return;
           }
 
           if (contract?.licenca_id) {
             setLicenseId(contract.licenca_id);
 
-            // Buscar última leitura do mês anterior
+            // Buscar leitura do requerente do mês atual
+            const requerenteReadingData = await checkRequerenteReading(contract.licenca_id);
+            if (requerenteReadingData) {
+              setRequerenteReading(requerenteReadingData);
+              setRequerenteReadingId(requerenteReadingData.id);
+              
+              // Preencher campos declarados com dados do requerente
+              setFormData((prev) => ({
+                ...prev,
+                leituraDeclarada: requerenteReadingData.hidrometro_leitura_atual?.toFixed(2) || '',
+                horaDeclarada: requerenteReadingData.horimetro_leitura_atual?.toFixed(2) || '',
+              }));
+
+              // Buscar imagens do requerente (se houver campo de imagem)
+              // Por enquanto, vamos usar o campo observacoes se contiver URLs de imagens
+              // ou podemos criar uma tabela separada para imagens
+              if (requerenteReadingData.observacoes) {
+                try {
+                  const parsed = JSON.parse(requerenteReadingData.observacoes);
+                  if (Array.isArray(parsed) && parsed.length > 0) {
+                    // Verificar se são URLs válidas
+                    const validUrls = parsed.filter((url: any) => 
+                      typeof url === 'string' && (url.startsWith('http') || url.startsWith('data:'))
+                    );
+                    if (validUrls.length > 0) {
+                      setRequerenteImages(validUrls);
+                    }
+                  }
+                } catch {
+                  // Se não for JSON, verificar se é uma URL única
+                  if (requerenteReadingData.observacoes.startsWith('http') || 
+                      requerenteReadingData.observacoes.startsWith('data:')) {
+                    setRequerenteImages([requerenteReadingData.observacoes]);
+                  }
+                }
+              }
+            }
+
+            // Buscar última leitura do mês anterior (para cálculo de consumo)
             const now = new Date();
             const currentMonth = now.getMonth() + 1;
             const currentYear = now.getFullYear();
@@ -101,12 +147,19 @@ const MeterReadingModal = ({ isOpen, onClose, contractId }: MeterReadingModalPro
           }
         } catch (error) {
           console.error('Error fetching contract data:', error);
+          toast({
+            title: 'Erro',
+            description: 'Não foi possível carregar os dados da leitura.',
+            variant: 'destructive',
+          });
+        } finally {
+          setIsLoadingData(false);
         }
       };
 
       fetchContractData();
     }
-  }, [isOpen, contractId]);
+  }, [isOpen, contractId, toast]);
 
   // Autosave hook
   const autosaveKey = useMemo(() => `meter_draft_${contractId}`, [contractId]);
@@ -200,26 +253,17 @@ const MeterReadingModal = ({ isOpen, onClose, contractId }: MeterReadingModalPro
     const newErrors: Record<string, string> = {};
 
     // Leitura Apurada é obrigatória
-    if (!formData.leituraApurada) {
-      newErrors.leituraApurada = 'Leitura Apurada é obrigatória';
+    if (!formData.leituraApurada || formData.leituraApurada.trim() === '') {
+      newErrors.leituraApurada = 'Campo Obrigatório';
     } else if (isNaN(Number(formData.leituraApurada)) || Number(formData.leituraApurada) < 0) {
       newErrors.leituraApurada = 'Deve ser um número positivo';
     }
 
     // Hora Apurada é obrigatória
-    if (!formData.horaApurada) {
-      newErrors.horaApurada = 'Hora Apurada é obrigatória';
+    if (!formData.horaApurada || formData.horaApurada.trim() === '') {
+      newErrors.horaApurada = 'Campo Obrigatório';
     } else if (isNaN(Number(formData.horaApurada)) || Number(formData.horaApurada) < 0) {
       newErrors.horaApurada = 'Deve ser um número positivo';
-    }
-
-    // Validate optional numeric fields
-    if (formData.leituraDeclarada && isNaN(Number(formData.leituraDeclarada))) {
-      newErrors.leituraDeclarada = 'Deve ser um número válido';
-    }
-
-    if (formData.horaDeclarada && isNaN(Number(formData.horaDeclarada))) {
-      newErrors.horaDeclarada = 'Deve ser um número válido';
     }
 
     setErrors(newErrors);
@@ -259,10 +303,11 @@ const MeterReadingModal = ({ isOpen, onClose, contractId }: MeterReadingModalPro
       const hidrometroLeituraAtual = parseFloat(formData.leituraApurada);
       const horimetroLeituraAtual = parseFloat(formData.horaApurada);
       
-      const hidrometroLeituraAnterior = previousReading?.hidrometro || 
-        (formData.leituraDeclarada ? parseFloat(formData.leituraDeclarada) : null);
-      const horimetroLeituraAnterior = previousReading?.horimetro || 
-        (formData.horaDeclarada ? parseFloat(formData.horaDeclarada) : null);
+      // Usar leitura do requerente como anterior, ou leitura do mês anterior
+      const hidrometroLeituraAnterior = requerenteReading?.hidrometro_leitura_atual || 
+        previousReading?.hidrometro || null;
+      const horimetroLeituraAnterior = requerenteReading?.horimetro_leitura_atual || 
+        previousReading?.horimetro || null;
 
       const hidrometroConsumo = hidrometroLeituraAnterior !== null 
         ? hidrometroLeituraAtual - hidrometroLeituraAnterior 
@@ -271,14 +316,16 @@ const MeterReadingModal = ({ isOpen, onClose, contractId }: MeterReadingModalPro
         ? horimetroLeituraAtual - horimetroLeituraAnterior 
         : null;
 
-      // Inserir monitoramento
+      // Preparar imagens para salvar (se houver)
+      const imageUrls: string[] = images.map((img) => img.preview);
+
+      // Inserir monitoramento com status "finalizado"
       // IMPORTANTE: usuario_id deve ser auth.uid() (user.id) para satisfazer a RLS policy
-      // A RLS policy espera: usuario_id = auth.uid()
       const { error: insertError } = await supabase
         .from('monitoramentos')
         .insert({
           licenca_id: licenseId,
-          usuario_id: user.id, // Usar auth.uid() diretamente, não o ID da tabela usuarios
+          usuario_id: user.id,
           mes,
           ano,
           data_leitura: dataLeitura,
@@ -288,10 +335,20 @@ const MeterReadingModal = ({ isOpen, onClose, contractId }: MeterReadingModalPro
           horimetro_leitura_anterior: horimetroLeituraAnterior,
           horimetro_leitura_atual: horimetroLeituraAtual,
           horimetro_horas_operacao: horimetroHorasOperacao,
+          status: 'finalizado',
+          observacoes: imageUrls.length > 0 ? JSON.stringify(imageUrls) : null,
         });
 
       if (insertError) {
         throw insertError;
+      }
+
+      // Atualizar status da leitura do requerente para "aprovado" ou similar
+      if (requerenteReadingId) {
+        await supabase
+          .from('monitoramentos')
+          .update({ status: 'aprovado' })
+          .eq('id', requerenteReadingId);
       }
 
       toast({
@@ -300,6 +357,8 @@ const MeterReadingModal = ({ isOpen, onClose, contractId }: MeterReadingModalPro
         variant: 'default',
       });
 
+      // Limpar rascunho
+      clearDraft();
       handleClose();
     } catch (error: any) {
       console.error('Error saving meter reading:', error);
@@ -311,19 +370,65 @@ const MeterReadingModal = ({ isOpen, onClose, contractId }: MeterReadingModalPro
     } finally {
       setIsLoading(false);
     }
-    // Limpar rascunho
-    clearDraft();
-    handleClose();
   };
 
-  const handleRequestNewMeasurement = () => {
-    toast({
-      title: 'Nova medição solicitada',
-      description: 'Uma solicitação de nova medição foi enviada.',
-      variant: 'default',
-    });
-    clearDraft();
-    handleClose();
+  const handleRequestNewMeasurement = async () => {
+    if (!requerenteReadingId || !licenseId) {
+      toast({
+        title: 'Erro',
+        description: 'Não foi possível identificar a leitura do requerente.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      // Atualizar status da leitura do requerente para "pendente_edicao"
+      const { error: updateError } = await supabase
+        .from('monitoramentos')
+        .update({ status: 'pendente_edicao' })
+        .eq('id', requerenteReadingId);
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      // Criar notificação para o requerente
+      // Buscar auth_user_id do requerente através da leitura
+      const { data: monitoramento } = await supabase
+        .from('monitoramentos')
+        .select('usuario_id')
+        .eq('id', requerenteReadingId)
+        .single();
+
+      if (monitoramento?.usuario_id) {
+        await createNotificationForRequerente(
+          monitoramento.usuario_id,
+          licenseId,
+          'Nova edição solicitada',
+          'O corpo técnico solicitou uma nova edição da leitura mensal. Por favor, revise e atualize os dados.'
+        );
+      }
+
+      toast({
+        title: 'Nova edição solicitada',
+        description: 'A solicitação foi enviada ao requerente via notificação.',
+        variant: 'default',
+      });
+
+      handleClose();
+    } catch (error: any) {
+      console.error('Error requesting new measurement:', error);
+      toast({
+        title: 'Erro ao solicitar nova edição',
+        description: error.message || 'Não foi possível solicitar a nova edição.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleClose = () => {
@@ -334,10 +439,14 @@ const MeterReadingModal = ({ isOpen, onClose, contractId }: MeterReadingModalPro
       horaApurada: '',
     });
     setImages([]);
+    setRequerenteImages([]);
     setErrors({});
     setLicenseId(null);
+    setRequerenteReading(null);
+    setRequerenteReadingId(null);
     setPreviousReading(null);
     setIsLoading(false);
+    setIsLoadingData(false);
     onClose();
   };
 
@@ -350,15 +459,52 @@ const MeterReadingModal = ({ isOpen, onClose, contractId }: MeterReadingModalPro
               <Gauge className="h-5 w-5 text-emerald-600" />
             </div>
             <div>
-              <DialogTitle className="text-2xl">Apurar Hidrômetro e Horímetro do Mês de Agosto</DialogTitle>
-              <DialogDescription>Registre as leituras e envie as imagens comprobatórias</DialogDescription>
+              <DialogTitle className="text-2xl">
+                Apurar Hidrômetro e Horímetro do Mês de {new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+              </DialogTitle>
+              <DialogDescription>
+                Revise os dados declarados pelo requerente e registre as leituras apuradas
+              </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-6 mt-4">
-          {/* Upload de Imagens */}
-          <div className="space-y-4">
+        {isLoadingData ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+            <span className="ml-3 text-gray-600">Carregando dados da leitura...</span>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-6 mt-4">
+            {/* Imagens do Requerente */}
+            {requerenteImages.length > 0 && (
+              <div className="space-y-4">
+                <Label className="text-sm font-medium">Imagens da Leitura do Requerente</Label>
+                <div className="grid grid-cols-2 gap-4">
+                  {requerenteImages.map((imageUrl, index) => (
+                    <div key={index} className="relative group">
+                      <img
+                        src={imageUrl}
+                        alt={`Leitura requerente ${index + 1}`}
+                        className="w-full h-32 object-cover rounded-lg border-2 border-gray-200"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => window.open(imageUrl, '_blank')}
+                        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Upload de Imagens Adicionais */}
+            <div className="space-y-4">
             <input
               ref={fileInputRef}
               type="file"
@@ -369,6 +515,7 @@ const MeterReadingModal = ({ isOpen, onClose, contractId }: MeterReadingModalPro
               id="images-upload"
             />
 
+            <Label className="text-sm font-medium">Adicionar Imagens Comprobatórias (Opcional)</Label>
             <Button
               type="button"
               variant="outline"
@@ -427,86 +574,87 @@ const MeterReadingModal = ({ isOpen, onClose, contractId }: MeterReadingModalPro
             )}
           </div>
 
-          {/* Leituras */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Leitura Declarada */}
-            <div className="space-y-2">
-              <Label htmlFor="leituraDeclarada" className="text-sm font-medium">
-                Leitura Declarada
-              </Label>
-              <Input
-                id="leituraDeclarada"
-                type="number"
-                step="0.01"
-                value={formData.leituraDeclarada}
-                onChange={(e) => handleInputChange('leituraDeclarada', e.target.value)}
-                placeholder="110239"
-                className={`h-11 ${errors.leituraDeclarada ? 'border-red-500' : ''}`}
-              />
-              {errors.leituraDeclarada && (
-                <p className="text-xs text-red-500">{errors.leituraDeclarada}</p>
-              )}
-            </div>
+          {/* Leituras Declaradas (Somente Leitura) */}
+          <div className="space-y-4">
+            <Label className="text-base font-semibold">Leituras Declaradas pelo Requerente</Label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Leitura Declarada */}
+              <div className="space-y-2">
+                <Label htmlFor="leituraDeclarada" className="text-sm font-medium">
+                  Leitura Declarada (Hidrômetro)
+                </Label>
+                <Input
+                  id="leituraDeclarada"
+                  type="number"
+                  step="0.01"
+                  value={formData.leituraDeclarada}
+                  disabled
+                  placeholder="Não informado"
+                  className="h-11 bg-gray-100 border-gray-300 text-gray-700 cursor-not-allowed"
+                />
+              </div>
 
-            {/* Hora Declarada */}
-            <div className="space-y-2">
-              <Label htmlFor="horaDeclarada" className="text-sm font-medium">
-                Hora Declarada
-              </Label>
-              <Input
-                id="horaDeclarada"
-                type="number"
-                step="0.01"
-                value={formData.horaDeclarada}
-                onChange={(e) => handleInputChange('horaDeclarada', e.target.value)}
-                placeholder="4271.46"
-                className={`h-11 ${errors.horaDeclarada ? 'border-red-500' : ''}`}
-              />
-              {errors.horaDeclarada && (
-                <p className="text-xs text-red-500">{errors.horaDeclarada}</p>
-              )}
+              {/* Hora Declarada */}
+              <div className="space-y-2">
+                <Label htmlFor="horaDeclarada" className="text-sm font-medium">
+                  Hora Declarada (Horímetro)
+                </Label>
+                <Input
+                  id="horaDeclarada"
+                  type="number"
+                  step="0.01"
+                  value={formData.horaDeclarada}
+                  disabled
+                  placeholder="Não informado"
+                  className="h-11 bg-gray-100 border-gray-300 text-gray-700 cursor-not-allowed"
+                />
+              </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Leitura Apurada */}
-            <div className="space-y-2">
-              <Label htmlFor="leituraApurada" className="text-sm font-medium">
-                Leitura Apurada *
-              </Label>
-              <Input
-                id="leituraApurada"
-                type="number"
-                step="0.01"
-                value={formData.leituraApurada}
-                onChange={(e) => handleInputChange('leituraApurada', e.target.value)}
-                placeholder="110239"
-                className={`h-11 ${errors.leituraApurada ? 'border-red-500' : ''}`}
-                required
-              />
-              {errors.leituraApurada && (
-                <p className="text-xs text-red-500">{errors.leituraApurada}</p>
-              )}
-            </div>
+          {/* Leituras Apuradas (Preenchimento Obrigatório) */}
+          <div className="space-y-4">
+            <Label className="text-base font-semibold">Leituras Apuradas pelo Corpo Técnico</Label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Leitura Apurada */}
+              <div className="space-y-2">
+                <Label htmlFor="leituraApurada" className="text-sm font-medium">
+                  Leitura Apurada (Hidrômetro) *
+                </Label>
+                <Input
+                  id="leituraApurada"
+                  type="number"
+                  step="0.01"
+                  value={formData.leituraApurada}
+                  onChange={(e) => handleInputChange('leituraApurada', e.target.value)}
+                  placeholder="0.00"
+                  className={`h-11 ${errors.leituraApurada ? 'border-red-500' : ''}`}
+                  required
+                />
+                {errors.leituraApurada && (
+                  <p className="text-xs text-red-500 font-medium">{errors.leituraApurada}</p>
+                )}
+              </div>
 
-            {/* Hora Apurada */}
-            <div className="space-y-2">
-              <Label htmlFor="horaApurada" className="text-sm font-medium">
-                Hora Apurada *
-              </Label>
-              <Input
-                id="horaApurada"
-                type="number"
-                step="0.01"
-                value={formData.horaApurada}
-                onChange={(e) => handleInputChange('horaApurada', e.target.value)}
-                placeholder="4271.46"
-                className={`h-11 ${errors.horaApurada ? 'border-red-500' : ''}`}
-                required
-              />
-              {errors.horaApurada && (
-                <p className="text-xs text-red-500">{errors.horaApurada}</p>
-              )}
+              {/* Hora Apurada */}
+              <div className="space-y-2">
+                <Label htmlFor="horaApurada" className="text-sm font-medium">
+                  Hora Apurada (Horímetro) *
+                </Label>
+                <Input
+                  id="horaApurada"
+                  type="number"
+                  step="0.01"
+                  value={formData.horaApurada}
+                  onChange={(e) => handleInputChange('horaApurada', e.target.value)}
+                  placeholder="0.00"
+                  className={`h-11 ${errors.horaApurada ? 'border-red-500' : ''}`}
+                  required
+                />
+                {errors.horaApurada && (
+                  <p className="text-xs text-red-500 font-medium">{errors.horaApurada}</p>
+                )}
+              </div>
             </div>
           </div>
 
@@ -518,9 +666,17 @@ const MeterReadingModal = ({ isOpen, onClose, contractId }: MeterReadingModalPro
               type="button"
               variant="outline"
               onClick={handleRequestNewMeasurement}
+              disabled={isLoading || !requerenteReadingId}
               className="border-emerald-600 text-emerald-600 hover:bg-emerald-50"
             >
-              Solicitar Nova Medição
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Solicitando...
+                </>
+              ) : (
+                'Solicitar Nova Edição'
+              )}
             </Button>
             <Button
               type="submit"
@@ -538,6 +694,7 @@ const MeterReadingModal = ({ isOpen, onClose, contractId }: MeterReadingModalPro
             </Button>
           </DialogFooter>
         </form>
+        )}
       </DialogContent>
     </Dialog>
   );
