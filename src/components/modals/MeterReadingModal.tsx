@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -11,7 +11,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Gauge, Upload, Eye, X } from 'lucide-react';
+import { Gauge, Upload, Eye, X, Loader2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 
 interface MeterReadingModalProps {
   isOpen: boolean;
@@ -27,6 +29,7 @@ interface ImageData {
 
 const MeterReadingModal = ({ isOpen, onClose, contractId }: MeterReadingModalProps) => {
   const { toast } = useToast();
+  const { user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState({
@@ -38,6 +41,71 @@ const MeterReadingModal = ({ isOpen, onClose, contractId }: MeterReadingModalPro
 
   const [images, setImages] = useState<ImageData[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isLoading, setIsLoading] = useState(false);
+  const [licenseId, setLicenseId] = useState<string | null>(null);
+  const [previousReading, setPreviousReading] = useState<{
+    hidrometro: number | null;
+    horimetro: number | null;
+  } | null>(null);
+
+  // Buscar licenca_id do contrato e leitura anterior
+  useEffect(() => {
+    if (isOpen && contractId) {
+      const fetchContractData = async () => {
+        try {
+          // Buscar licenca_id do contrato
+          const { data: contract, error: contractError } = await supabase
+            .from('contratos')
+            .select('licenca_id')
+            .eq('id', contractId)
+            .single();
+
+          if (contractError) {
+            console.error('Error fetching contract:', contractError);
+            return;
+          }
+
+          if (contract?.licenca_id) {
+            setLicenseId(contract.licenca_id);
+
+            // Buscar última leitura do mês anterior
+            const now = new Date();
+            const currentMonth = now.getMonth() + 1;
+            const currentYear = now.getFullYear();
+            
+            // Buscar leitura do mês anterior
+            let previousMonth = currentMonth - 1;
+            let previousYear = currentYear;
+            if (previousMonth === 0) {
+              previousMonth = 12;
+              previousYear = currentYear - 1;
+            }
+
+            const { data: previousMonitoramento } = await supabase
+              .from('monitoramentos')
+              .select('hidrometro_leitura_atual, horimetro_leitura_atual')
+              .eq('licenca_id', contract.licenca_id)
+              .eq('mes', previousMonth)
+              .eq('ano', previousYear)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .single();
+
+            if (previousMonitoramento) {
+              setPreviousReading({
+                hidrometro: previousMonitoramento.hidrometro_leitura_atual,
+                horimetro: previousMonitoramento.horimetro_leitura_atual,
+              });
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching contract data:', error);
+        }
+      };
+
+      fetchContractData();
+    }
+  }, [isOpen, contractId]);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -137,7 +205,7 @@ const MeterReadingModal = ({ isOpen, onClose, contractId }: MeterReadingModalPro
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!validateForm()) {
@@ -149,14 +217,79 @@ const MeterReadingModal = ({ isOpen, onClose, contractId }: MeterReadingModalPro
       return;
     }
 
-    // Simulate success (no Supabase integration yet)
-    toast({
-      title: 'Leituras registradas com sucesso!',
-      description: `As leituras foram registradas para o contrato ${contractId}.`,
-      variant: 'default',
-    });
+    if (!licenseId || !user) {
+      toast({
+        title: 'Erro',
+        description: 'Não foi possível identificar a licença ou o usuário.',
+        variant: 'destructive',
+      });
+      return;
+    }
 
-    handleClose();
+    setIsLoading(true);
+
+    try {
+      const now = new Date();
+      const mes = now.getMonth() + 1;
+      const ano = now.getFullYear();
+      const dataLeitura = now.toISOString().split('T')[0];
+
+      // Calcular consumo e horas de operação
+      const hidrometroLeituraAtual = parseFloat(formData.leituraApurada);
+      const horimetroLeituraAtual = parseFloat(formData.horaApurada);
+      
+      const hidrometroLeituraAnterior = previousReading?.hidrometro || 
+        (formData.leituraDeclarada ? parseFloat(formData.leituraDeclarada) : null);
+      const horimetroLeituraAnterior = previousReading?.horimetro || 
+        (formData.horaDeclarada ? parseFloat(formData.horaDeclarada) : null);
+
+      const hidrometroConsumo = hidrometroLeituraAnterior !== null 
+        ? hidrometroLeituraAtual - hidrometroLeituraAnterior 
+        : null;
+      const horimetroHorasOperacao = horimetroLeituraAnterior !== null 
+        ? horimetroLeituraAtual - horimetroLeituraAnterior 
+        : null;
+
+      // Inserir monitoramento
+      // IMPORTANTE: usuario_id deve ser auth.uid() (user.id) para satisfazer a RLS policy
+      // A RLS policy espera: usuario_id = auth.uid()
+      const { error: insertError } = await supabase
+        .from('monitoramentos')
+        .insert({
+          licenca_id: licenseId,
+          usuario_id: user.id, // Usar auth.uid() diretamente, não o ID da tabela usuarios
+          mes,
+          ano,
+          data_leitura: dataLeitura,
+          hidrometro_leitura_anterior: hidrometroLeituraAnterior,
+          hidrometro_leitura_atual: hidrometroLeituraAtual,
+          hidrometro_consumo: hidrometroConsumo,
+          horimetro_leitura_anterior: horimetroLeituraAnterior,
+          horimetro_leitura_atual: horimetroLeituraAtual,
+          horimetro_horas_operacao: horimetroHorasOperacao,
+        });
+
+      if (insertError) {
+        throw insertError;
+      }
+
+      toast({
+        title: 'Leituras registradas com sucesso!',
+        description: `As leituras foram registradas para o contrato ${contractId}.`,
+        variant: 'default',
+      });
+
+      handleClose();
+    } catch (error: any) {
+      console.error('Error saving meter reading:', error);
+      toast({
+        title: 'Erro ao salvar',
+        description: error.message || 'Não foi possível salvar as leituras. Tente novamente.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleRequestNewMeasurement = () => {
@@ -177,6 +310,9 @@ const MeterReadingModal = ({ isOpen, onClose, contractId }: MeterReadingModalPro
     });
     setImages([]);
     setErrors({});
+    setLicenseId(null);
+    setPreviousReading(null);
+    setIsLoading(false);
     onClose();
   };
 
@@ -363,9 +499,17 @@ const MeterReadingModal = ({ isOpen, onClose, contractId }: MeterReadingModalPro
             </Button>
             <Button
               type="submit"
+              disabled={isLoading}
               className="bg-gradient-to-r from-emerald-600 to-teal-700 text-white hover:from-emerald-700 hover:to-teal-800"
             >
-              Salvar
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Salvando...
+                </>
+              ) : (
+                'Salvar'
+              )}
             </Button>
           </DialogFooter>
         </form>
