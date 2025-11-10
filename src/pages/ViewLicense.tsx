@@ -72,7 +72,7 @@ import { getLicenseById } from '@/services/licenseService';
 import { getContractsByLicenseId } from '@/services/contractService';
 import { useToast } from '@/hooks/use-toast';
 import { generateMonitoringReport } from '@/services/reportService';
-import { checkRequerenteReading, checkCorpoTecnicoApuracao } from '@/services/monitoringService';
+import { checkRequerenteReading, checkCorpoTecnicoApuracao, getMonitoringHistory, type MonthlyReading } from '@/services/monitoringService';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -87,6 +87,7 @@ import {
 import PhysicalChemicalAnalysisModal from '@/components/modals/PhysicalChemicalAnalysisModal';
 import NDNEModal from '@/components/modals/NDNEModal';
 import MeterReadingModal from '@/components/modals/MeterReadingModal';
+import MonitoringHistoryChart from '@/components/MonitoringHistoryChart';
 
 interface LicenseData {
   id: string;
@@ -129,6 +130,8 @@ const ViewLicense = () => {
   const [showNoReadingDialog, setShowNoReadingDialog] = useState(false);
   const [existingApuracaoId, setExistingApuracaoId] = useState<string | null>(null);
   const [hasExistingApuracao, setHasExistingApuracao] = useState(false);
+  const [historyData, setHistoryData] = useState<MonthlyReading[] | null>(null);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
   // Navigation items for the sidebar
   const navItems = [
@@ -209,6 +212,27 @@ const ViewLicense = () => {
 
     loadLicense();
   }, [id, navigate, toast]);
+
+  // Load monitoring history
+  useEffect(() => {
+    const loadHistory = async () => {
+      if (!id) return;
+
+      try {
+        setIsLoadingHistory(true);
+        const history = await getMonitoringHistory(id);
+        setHistoryData(history);
+      } catch (error) {
+        console.error('Error loading monitoring history:', error);
+        // Não exibir toast de erro, apenas não mostrar o gráfico
+        setHistoryData(null);
+      } finally {
+        setIsLoadingHistory(false);
+      }
+    };
+
+    loadHistory();
+  }, [id]);
 
   const handleLogout = () => {
     console.log('Logout clicked');
@@ -1140,6 +1164,30 @@ const ViewLicense = () => {
                             ))}
                           </TableBody>
                         </Table>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Histórico de Monitoramento Section */}
+                  <Separator className="my-8" />
+
+                  <div>
+                    {isLoadingHistory ? (
+                      <div className="space-y-3">
+                        <Skeleton className="h-12 w-full" />
+                        <Skeleton className="h-[400px] w-full" />
+                      </div>
+                    ) : historyData && historyData.length > 0 ? (
+                      <MonitoringHistoryChart data={historyData} />
+                    ) : (
+                      <div className="rounded-lg border border-gray-200 bg-gray-50 p-8 text-center">
+                        <FileBarChart className="mx-auto h-12 w-12 text-gray-400 mb-3" />
+                        <p className="text-gray-600 font-medium mb-1">
+                          O monitoramento da outorga ainda não foi iniciado
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          O histórico será exibido após a primeira apuração.
+                        </p>
                       </div>
                     )}
                   </div>

@@ -181,3 +181,99 @@ export const checkCorpoTecnicoApuracao = async (
   }
 };
 
+export interface MonthlyReading {
+  mes: string;
+  hidrometro: number | null;
+  horimetro: number | null;
+  nd: number | null;
+  ne: number | null;
+}
+
+/**
+ * Busca histórico de monitoramentos dos últimos 12 meses a partir da primeira apuração
+ * @param licenseId ID da licença
+ * @returns Array com dados dos últimos 12 meses ou null se não houver apurações
+ */
+export const getMonitoringHistory = async (
+  licenseId: string
+): Promise<MonthlyReading[] | null> => {
+  try {
+    // Buscar a primeira apuração (monitoramento mais antigo com status finalizado)
+    const { data: firstApuracao, error: firstError } = await supabase
+      .from('monitoramentos')
+      .select('mes, ano, created_at')
+      .eq('licenca_id', licenseId)
+      .eq('status', 'finalizado')
+      .order('ano', { ascending: true })
+      .order('mes', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (firstError) {
+      console.error('Error fetching first apuracao:', firstError);
+      throw firstError;
+    }
+
+    // Se não houver apuração, retornar null
+    if (!firstApuracao) {
+      return null;
+    }
+
+    // Gerar array com os 12 meses subsequentes a partir da primeira apuração
+    const startMonth = firstApuracao.mes;
+    const startYear = firstApuracao.ano;
+    const months: Array<{ mes: number; ano: number; mesNome: string }> = [];
+
+    for (let i = 0; i < 12; i++) {
+      const month = ((startMonth - 1 + i) % 12) + 1;
+      const year = startYear + Math.floor((startMonth - 1 + i) / 12);
+      
+      const monthNames = [
+        'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+        'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+      ];
+      
+      months.push({
+        mes: month,
+        ano: year,
+        mesNome: monthNames[month - 1],
+      });
+    }
+
+    // Buscar todos os monitoramentos finalizados desses 12 meses
+    const { data: monitoramentos, error: monitoramentosError } = await supabase
+      .from('monitoramentos')
+      .select('mes, ano, hidrometro_leitura_atual, horimetro_leitura_atual, nd_metros, ne_metros')
+      .eq('licenca_id', licenseId)
+      .eq('status', 'finalizado')
+      .in('mes', months.map(m => m.mes))
+      .in('ano', months.map(m => m.ano));
+
+    if (monitoramentosError) {
+      console.error('Error fetching monitoramentos:', monitoramentosError);
+      throw monitoramentosError;
+    }
+
+    // Mapear os dados para cada mês
+    const result: MonthlyReading[] = months.map((monthInfo) => {
+      // Encontrar monitoramento para este mês/ano
+      const monitoramento = monitoramentos?.find(
+        (m) => m.mes === monthInfo.mes && m.ano === monthInfo.ano
+      );
+
+      return {
+        mes: monthInfo.mesNome,
+        hidrometro: monitoramento?.hidrometro_leitura_atual || null,
+        horimetro: monitoramento?.horimetro_leitura_atual || null,
+        nd: monitoramento?.nd_metros || null,
+        ne: monitoramento?.ne_metros || null,
+      };
+    });
+
+    return result;
+  } catch (error) {
+    console.error('Error in getMonitoringHistory:', error);
+    throw error;
+  }
+};
+
