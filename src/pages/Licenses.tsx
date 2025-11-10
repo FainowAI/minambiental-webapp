@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
 import { getLicenses, LicenseFilters, LicenseData } from '@/services/licenseService';
+import { generateMonitoringReport } from '@/services/reportService';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -19,6 +20,7 @@ import {
   Search,
   X,
   FileDown,
+  FileSpreadsheet,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -65,6 +67,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Tooltip,
   TooltipContent,
@@ -77,6 +80,8 @@ const Licenses = () => {
   const location = useLocation();
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [selectedLicenses, setSelectedLicenses] = useState<Set<string>>(new Set());
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
 
   // Filter state
   const [filters, setFilters] = useState<LicenseFilters>({
@@ -95,6 +100,8 @@ const Licenses = () => {
     queryKey: ['licenses', filters, currentPage, itemsPerPage],
     queryFn: () => getLicenses(filters, currentPage, itemsPerPage),
     staleTime: 30000, // 30 seconds
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
   const licenses = licensesData?.data || [];
@@ -146,6 +153,46 @@ const Licenses = () => {
       validityEnd: '',
     });
     setCurrentPage(1);
+  };
+
+  const handleSelectLicense = (licenseId: string) => {
+    setSelectedLicenses(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(licenseId)) {
+        newSet.delete(licenseId);
+      } else {
+        newSet.add(licenseId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      const allIds = new Set(licenses.map(l => l.id));
+      setSelectedLicenses(allIds);
+    } else {
+      setSelectedLicenses(new Set());
+    }
+  };
+
+  const handleGenerateReport = async () => {
+    if (selectedLicenses.size === 0) {
+      toast.error('Selecione pelo menos uma licença para gerar o relatório');
+      return;
+    }
+
+    try {
+      setIsGeneratingReport(true);
+      await generateMonitoringReport(Array.from(selectedLicenses));
+      toast.success('Relatório gerado com sucesso!');
+      setSelectedLicenses(new Set());
+    } catch (error: any) {
+      console.error('Erro ao gerar relatório:', error);
+      toast.error(error.message || 'Erro ao gerar relatório');
+    } finally {
+      setIsGeneratingReport(false);
+    }
   };
 
   return (
@@ -438,12 +485,21 @@ const Licenses = () => {
               {/* Action Buttons */}
               <div className="mt-6 flex flex-wrap items-center justify-end gap-3">
                 <Button
-                  variant="outline"
-                  className="h-11 border-emerald-600 text-emerald-600 hover:bg-emerald-50"
-                  onClick={() => toast.info('Funcionalidade em desenvolvimento')}
+                  onClick={handleGenerateReport}
+                  disabled={selectedLicenses.size === 0 || isGeneratingReport}
+                  className="h-11 bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700 disabled:opacity-50"
                 >
-                  <FileDown className="mr-2 h-4 w-4" />
-                  Gerar Relatório Mensal
+                  {isGeneratingReport ? (
+                    <>
+                      <FileSpreadsheet className="mr-2 h-4 w-4 animate-spin" />
+                      Gerando...
+                    </>
+                  ) : (
+                    <>
+                      <FileSpreadsheet className="mr-2 h-4 w-4" />
+                      Gerar Relatório Excel {selectedLicenses.size > 0 && `(${selectedLicenses.size})`}
+                    </>
+                  )}
                 </Button>
                 <Button
                   onClick={clearFilters}
@@ -474,6 +530,13 @@ const Licenses = () => {
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-emerald-50 hover:bg-emerald-50">
+                      <TableHead className="w-12">
+                        <Checkbox
+                          checked={licenses.length > 0 && selectedLicenses.size === licenses.length}
+                          onCheckedChange={handleSelectAll}
+                          aria-label="Selecionar todas"
+                        />
+                      </TableHead>
                       <TableHead className="font-medium text-gray-700">CNPJ do Requerente</TableHead>
                       <TableHead className="font-medium text-gray-700">Requerente</TableHead>
                       <TableHead className="font-medium text-gray-700">Ato</TableHead>
@@ -486,6 +549,7 @@ const Licenses = () => {
                     {isLoading ? (
                       Array.from({ length: itemsPerPage }).map((_, index) => (
                         <TableRow key={`skeleton-${index}`}>
+                          <TableCell><Skeleton className="h-4 w-4" /></TableCell>
                           <TableCell><Skeleton className="h-4 w-32" /></TableCell>
                           <TableCell><Skeleton className="h-4 w-48" /></TableCell>
                           <TableCell><Skeleton className="h-4 w-40" /></TableCell>
@@ -496,19 +560,26 @@ const Licenses = () => {
                       ))
                     ) : isError ? (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center py-8 text-red-500">
+                        <TableCell colSpan={7} className="text-center py-8 text-red-500">
                           Erro ao carregar licenças. Por favor, tente novamente.
                         </TableCell>
                       </TableRow>
                     ) : licenses.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                        <TableCell colSpan={7} className="text-center py-8 text-gray-500">
                           Nenhuma licença encontrada.
                         </TableCell>
                       </TableRow>
                     ) : (
                       licenses.map((license: LicenseData) => (
                         <TableRow key={license.id} className="hover:bg-gray-50">
+                          <TableCell>
+                            <Checkbox
+                              checked={selectedLicenses.has(license.id)}
+                              onCheckedChange={() => handleSelectLicense(license.id)}
+                              aria-label={`Selecionar ${license.requerente?.nome_razao_social || 'licença'}`}
+                            />
+                          </TableCell>
                           <TableCell className="font-medium">
                             {license.requerente?.cpf_cnpj || '-'}
                           </TableCell>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
@@ -7,6 +7,8 @@ import { createUserWithInvite } from '@/services/userService';
 import { createRequerente } from '@/services/requerenteService';
 import { validateCPFOrCNPJ, validateEmail, validatePhone, validateName, validateCPF } from '@/utils/validators';
 import { maskCPFOrCNPJ, maskPhone } from '@/utils/masks';
+import { useFormAutosave } from '@/hooks/useFormAutosave';
+import { useUnsavedChangesPrompt } from '@/hooks/useUnsavedChangesPrompt';
 import {
   Home as HomeIcon,
   FileText,
@@ -109,6 +111,45 @@ const CreateUser = () => {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [showFields, setShowFields] = useState(false);
 
+  // Autosave hook
+  const autosaveKey = 'create_user_draft';
+  const { restoreDraft, clearDraft } = useFormAutosave(autosaveKey, formData, {
+    enabled: true,
+    debounceMs: 400,
+  });
+
+  // Função para verificar se há alterações
+  const isDirty = () => {
+    return (
+      formData.name.trim() !== '' ||
+      formData.cpf.trim() !== '' ||
+      formData.email.trim() !== '' ||
+      formData.phone.trim() !== '' ||
+      formData.perfil !== '' ||
+      formData.contato_medicao_cpf?.trim() !== '' ||
+      formData.contato_medicao_email?.trim() !== '' ||
+      formData.contato_medicao_celular?.trim() !== ''
+    );
+  };
+
+  // Aviso de alterações não salvas
+  useUnsavedChangesPrompt({
+    when: isDirty(),
+    message: 'Você tem alterações não salvas. Deseja realmente sair?',
+  });
+
+  // Restaurar rascunho ao montar componente
+  useEffect(() => {
+    const draft = restoreDraft();
+    if (draft) {
+      setFormData(draft);
+      setShowFields(Boolean(draft.perfil));
+      toast.info('Rascunho restaurado', {
+        duration: 3000,
+      });
+    }
+  }, [restoreDraft]);
+
   // Navigation items for the sidebar
   const navItems = [
     {
@@ -138,6 +179,7 @@ const CreateUser = () => {
   };
 
   const handleCancel = () => {
+    clearDraft();
     navigate('/users');
   };
 
@@ -249,6 +291,8 @@ const CreateUser = () => {
         }
       }
       
+      // Limpar rascunho após salvar com sucesso
+      clearDraft();
       navigate('/users');
 
     } catch (error) {

@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { useFormAutosave } from '@/hooks/useFormAutosave';
+import { useUnsavedChangesPrompt } from '@/hooks/useUnsavedChangesPrompt';
 import {
   Home as HomeIcon,
   FileText,
@@ -110,6 +112,52 @@ const CreateLicense = () => {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const { toast } = useToast();
 
+  // Autosave hook
+  const autosaveKey = 'create_license_draft';
+  const { restoreDraft, clearDraft } = useFormAutosave(autosaveKey, formData, {
+    enabled: true,
+    debounceMs: 400,
+  });
+
+  // Função para verificar se há alterações
+  const isDirty = () => {
+    return (
+      formData.licenseNumber.trim() !== '' ||
+      formData.cnpj.trim() !== '' ||
+      formData.act.trim() !== '' ||
+      formData.actObject.trim() !== '' ||
+      formData.municipality.trim() !== '' ||
+      formData.validityStart.trim() !== '' ||
+      formData.validityEnd.trim() !== '' ||
+      formData.pdfFile !== null
+    );
+  };
+
+  // Aviso de alterações não salvas
+  useUnsavedChangesPrompt({
+    when: isDirty(),
+    message: 'Você tem alterações não salvas. Deseja realmente sair?',
+  });
+
+  // Restaurar rascunho ao montar componente
+  useEffect(() => {
+    const draft = restoreDraft();
+    if (draft) {
+      setFormData({ ...draft, pdfFile: null }); // Arquivo não pode ser restaurado
+      if (draft.pdfFile) {
+        toast({
+          title: 'Rascunho restaurado',
+          description: 'Atenção: você precisará selecionar o arquivo PDF novamente.',
+        });
+      } else {
+        toast({
+          title: 'Rascunho restaurado',
+          description: 'Continue de onde parou.',
+        });
+      }
+    }
+  }, [restoreDraft, toast]);
+
   // Municípios de Mato Grosso do Sul (CA 08)
   const MS_MUNICIPIOS = [
     'Água Clara','Alcinópolis','Amambai','Anastácio','Anaurilândia','Angélica','Antônio João','Aparecida do Taboado','Aquidauana','Aral Moreira','Bandeirantes','Bataguassu','Bataiporã','Bela Vista','Bodoquena','Bonito','Brasilândia','Caarapó','Camapuã','Campo Grande','Caracol','Cassilândia','Chapadão do Sul','Corguinho','Coronel Sapucaia','Corumbá','Costa Rica','Coxim','Deodápolis','Dois Irmãos do Buriti','Douradina','Dourados','Eldorado','Fátima do Sul','Figueirão','Glória de Dourados','Guia Lopes da Laguna','Iguatemi','Inocência','Itaporã','Itaquiraí','Ivinhema','Japorã','Jaraguari','Jardim','Jateí','Juti','Ladário','Laguna Carapã','Maracaju','Miranda','Mundo Novo','Naviraí','Nioaque','Nova Alvorada do Sul','Nova Andradina','Novo Horizonte do Sul','Paranaíba','Paranhos','Pedro Gomes','Ponta Porã','Porto Murtinho','Ribas do Rio Pardo','Rio Brilhante','Rio Negro','Rio Verde de Mato Grosso','Rochedo','Santa Rita do Pardo','São Gabriel do Oeste','Selvíria','Sete Quedas','Sidrolândia','Sonora','Tacuru','Taquarussu','Terenos','Três Lagoas','Vicentina'
@@ -143,6 +191,7 @@ const CreateLicense = () => {
   };
 
   const handleCancel = () => {
+    clearDraft();
     navigate('/licenses');
   };
 
@@ -198,6 +247,7 @@ const CreateLicense = () => {
       await createLicense(payload);
 
       // Sucesso
+      clearDraft();
       toast({
         title: 'Licença cadastrada com sucesso!',
         description: 'A licença foi salva e o PDF foi enviado.',

@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useFormAutosave } from '@/hooks/useFormAutosave';
+import { useUnsavedChangesPrompt } from '@/hooks/useUnsavedChangesPrompt';
 import { motion } from 'framer-motion';
 import {
   Home as HomeIcon,
@@ -143,6 +145,20 @@ const ContractFormPage = ({ mode }: ContractFormPageProps) => {
   const [formData, setFormData] = useState<ContractFormValues>(() => createDefaultFormData());
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [showTechnicianNotFoundDialog, setShowTechnicianNotFoundDialog] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
+  const initialFormDataRef = useRef<ContractFormValues | null>(null);
+
+  // Autosave hook
+  const autosaveKey = `contract_draft_${licenseId}_${isEditMode ? contractId : 'new'}`;
+  const { restoreDraft, clearDraft } = useFormAutosave(autosaveKey, formData, {
+    enabled: isDirty && !isLoading,
+  });
+
+  // Unsaved changes prompt
+  useUnsavedChangesPrompt({
+    when: isDirty && !isSaving,
+    message: 'Você tem alterações não salvas. Deseja realmente sair?',
+  });
 
   const navItems = useMemo(
     () => [
@@ -209,12 +225,14 @@ const ContractFormPage = ({ mode }: ContractFormPageProps) => {
 
         setLicenseData(license);
 
+        let initialData: ContractFormValues;
+
         if (isEditMode) {
           const contract = await getContractById(contractId!);
           const valuesFromContract = mapContractDataToFormValues(contract);
           const defaults = createDefaultFormData();
 
-          setFormData(() => ({
+          initialData = {
             ...defaults,
             ...valuesFromContract,
             paisContrato: valuesFromContract.paisContrato || 'Brasil',
@@ -222,27 +240,47 @@ const ContractFormPage = ({ mode }: ContractFormPageProps) => {
             registroEmpresaContratada:
               valuesFromContract.registroEmpresaContratada || defaults.registroEmpresaContratada,
             finalidade: valuesFromContract.finalidade || defaults.finalidade,
-          }));
+          };
         } else {
           const defaults = createDefaultFormData();
-          setFormData(defaults);
+          initialData = defaults;
 
           if (license.requerente?.id) {
             try {
               const requerenteData: any = await getUserById(license.requerente.id);
               if (requerenteData.contato_medicao_cpf) {
-                setFormData((prev) => ({
-                  ...prev,
+                initialData = {
+                  ...initialData,
                   cpfContato: maskCPF(requerenteData.contato_medicao_cpf),
                   telefoneContato: requerenteData.contato_medicao_celular
                     ? maskPhone(requerenteData.contato_medicao_celular)
                     : '',
-                }));
+                };
               }
             } catch (error) {
               console.log('Não foi possível carregar contato do requerente:', error);
             }
           }
+        }
+
+        // Tentar restaurar rascunho
+        const draft = restoreDraft();
+        if (draft && !isEditMode) {
+          const shouldRestore = window.confirm(
+            'Há um rascunho salvo. Deseja continuar de onde parou?'
+          );
+          if (shouldRestore) {
+            setFormData(draft);
+            setIsDirty(true);
+            initialFormDataRef.current = initialData;
+          } else {
+            clearDraft();
+            setFormData(initialData);
+            initialFormDataRef.current = initialData;
+          }
+        } else {
+          setFormData(initialData);
+          initialFormDataRef.current = initialData;
         }
 
         setErrors({});
@@ -276,6 +314,7 @@ const ContractFormPage = ({ mode }: ContractFormPageProps) => {
     }
 
     setFormData((prev) => ({ ...prev, [field]: value }));
+    setIsDirty(true);
   };
 
   const handleLookupCEP = async (fieldPrefix: 'Contrato' | 'Obra') => {
@@ -498,6 +537,10 @@ const ContractFormPage = ({ mode }: ContractFormPageProps) => {
           description: 'O contrato foi vinculado à licença.',
         });
       }
+
+      // Limpar rascunho após salvar com sucesso
+      clearDraft();
+      setIsDirty(false);
 
       setTimeout(() => {
         navigate(`/view-license/${licenseId}`);
