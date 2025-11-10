@@ -14,6 +14,10 @@ import {
   Plus,
   Eye,
   Pencil,
+  FileBarChart,
+  Beaker,
+  Droplets,
+  Gauge,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -67,6 +71,12 @@ import { maskCNPJ, maskDecimalTwoPlaces, decimalToDMS } from '@/utils/masks';
 import { getLicenseById } from '@/services/licenseService';
 import { getContractsByLicenseId } from '@/services/contractService';
 import { useToast } from '@/hooks/use-toast';
+import { generateMonitoringReport } from '@/services/reportService';
+
+// Modals
+import PhysicalChemicalAnalysisModal from '@/components/modals/PhysicalChemicalAnalysisModal';
+import NDNEModal from '@/components/modals/NDNEModal';
+import MeterReadingModal from '@/components/modals/MeterReadingModal';
 
 interface LicenseData {
   id: string;
@@ -101,6 +111,12 @@ const ViewLicense = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [licenseData, setLicenseData] = useState<LicenseData | null>(null);
 
+  // Modal states
+  const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
+  const [isNDNEModalOpen, setIsNDNEModalOpen] = useState(false);
+  const [isMeterModalOpen, setIsMeterModalOpen] = useState(false);
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+
   // Navigation items for the sidebar
   const navItems = [
     {
@@ -133,6 +149,8 @@ const ViewLicense = () => {
     queryFn: () => getContractsByLicenseId(id!),
     enabled: !!id, // Only run query if id exists
     staleTime: 30000, // Consider data fresh for 30 seconds
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
   // Load license data
@@ -222,6 +240,51 @@ const ViewLicense = () => {
         return 'bg-yellow-100 text-yellow-800 border-yellow-300';
       default:
         return 'bg-gray-100 text-gray-800 border-gray-300';
+    }
+  };
+
+  // Get active contract (current year)
+  const getActiveContract = () => {
+    if (!contracts || contracts.length === 0) return null;
+    
+    const currentDate = new Date();
+    
+    // Find contract with data_inicio <= today and previsao_termino >= today
+    const activeContract = contracts.find((contract: any) => {
+      const dataInicio = new Date(contract.data_inicio);
+      const previsaoTermino = new Date(contract.previsao_termino);
+      return dataInicio <= currentDate && previsaoTermino >= currentDate;
+    });
+    
+    // If no active contract, return the most recent one
+    if (!activeContract && contracts.length > 0) {
+      return contracts.sort((a: any, b: any) => 
+        new Date(b.data_inicio).getTime() - new Date(a.data_inicio).getTime()
+      )[0];
+    }
+    
+    return activeContract;
+  };
+
+  const handleGenerateReport = async () => {
+    if (!id) return;
+    
+    try {
+      setIsGeneratingReport(true);
+      await generateMonitoringReport([id]);
+      toast({
+        title: 'Relatório gerado com sucesso!',
+        description: 'O arquivo Excel foi baixado.',
+      });
+    } catch (error: any) {
+      console.error('Erro ao gerar relatório:', error);
+      toast({
+        title: 'Erro ao gerar relatório',
+        description: error.message || 'Tente novamente mais tarde.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsGeneratingReport(false);
     }
   };
 
@@ -837,6 +900,86 @@ const ViewLicense = () => {
                     </div>
                   </div>
 
+                  {/* Ações de Monitoramento Section */}
+                  <Separator className="my-8" />
+
+                  <div>
+                    <div className="flex items-center gap-3 pb-3 border-b border-gray-200 mb-4">
+                      <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-emerald-100 to-teal-100 flex items-center justify-center">
+                        <FileBarChart className="h-5 w-5 text-emerald-600" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-800">Ações de Monitoramento</h3>
+                        <p className="text-sm text-gray-600">
+                          {getActiveContract() 
+                            ? `Baseado no contrato: ${getActiveContract()?.numero || 'N/A'}` 
+                            : 'Nenhum contrato vigente encontrado'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {getActiveContract() ? (
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                        <Button
+                          onClick={handleGenerateReport}
+                          disabled={isGeneratingReport}
+                          className="h-12 justify-start gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700"
+                        >
+                          <FileBarChart className="h-5 w-5 flex-shrink-0" />
+                          <div className="text-left">
+                            <div className="font-semibold text-sm">Gerar Relatório</div>
+                            <div className="text-xs opacity-90">
+                              {isGeneratingReport ? 'Gerando...' : 'Exportar Excel'}
+                            </div>
+                          </div>
+                        </Button>
+
+                        <Button
+                          onClick={() => setIsAnalysisModalOpen(true)}
+                          className="h-12 justify-start gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700"
+                        >
+                          <Beaker className="h-5 w-5 flex-shrink-0" />
+                          <div className="text-left">
+                            <div className="font-semibold text-sm">Análise Físico-Química</div>
+                            <div className="text-xs opacity-90">Registrar análise</div>
+                          </div>
+                        </Button>
+
+                        <Button
+                          onClick={() => setIsNDNEModalOpen(true)}
+                          className="h-12 justify-start gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700"
+                        >
+                          <Droplets className="h-5 w-5 flex-shrink-0" />
+                          <div className="text-left">
+                            <div className="font-semibold text-sm">ND e NE</div>
+                            <div className="text-xs opacity-90">Níveis dinâmico/estático</div>
+                          </div>
+                        </Button>
+
+                        <Button
+                          onClick={() => setIsMeterModalOpen(true)}
+                          className="h-12 justify-start gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700"
+                        >
+                          <Gauge className="h-5 w-5 flex-shrink-0" />
+                          <div className="text-left">
+                            <div className="font-semibold text-sm">Hidrômetro/Horímetro</div>
+                            <div className="text-xs opacity-90">Leituras mensais</div>
+                          </div>
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-6 text-center">
+                        <FileText className="mx-auto h-12 w-12 text-yellow-600 mb-3" />
+                        <p className="text-yellow-800 font-medium mb-1">
+                          Nenhum contrato vigente
+                        </p>
+                        <p className="text-sm text-yellow-700">
+                          Para realizar ações de monitoramento, é necessário ter um contrato ativo vinculado a esta licença.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
                   {/* Contratos Vinculados Section */}
                   <Separator className="my-8" />
 
@@ -974,6 +1117,29 @@ const ViewLicense = () => {
           </main>
         </SidebarInset>
       </div>
+
+      {/* Modals */}
+      {getActiveContract() && (
+        <>
+          <PhysicalChemicalAnalysisModal
+            isOpen={isAnalysisModalOpen}
+            onClose={() => setIsAnalysisModalOpen(false)}
+            contractId={getActiveContract()?.id || ''}
+          />
+
+          <NDNEModal
+            isOpen={isNDNEModalOpen}
+            onClose={() => setIsNDNEModalOpen(false)}
+            contractId={getActiveContract()?.id || ''}
+          />
+
+          <MeterReadingModal
+            isOpen={isMeterModalOpen}
+            onClose={() => setIsMeterModalOpen(false)}
+            contractId={getActiveContract()?.id || ''}
+          />
+        </>
+      )}
     </SidebarProvider>
   );
 };

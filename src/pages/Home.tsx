@@ -2,6 +2,10 @@ import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Home as HomeIcon, FileText, Users, LogOut, User } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/hooks/useAuth';
+import { getNotificationsWithContract, dismissNotification, NotificationWithContract } from '@/services/notificationService';
+import NotificationBanner from '@/components/NotificationBanner';
 import {
   Sidebar,
   SidebarContent,
@@ -33,6 +37,27 @@ import { Separator } from '@/components/ui/separator';
 const Home = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  // Buscar notificações
+  const { data: notifications = [] } = useQuery<NotificationWithContract[]>({
+    queryKey: ['notifications', user?.id],
+    queryFn: () => user ? getNotificationsWithContract(user.id) : Promise.resolve([]),
+    enabled: !!user,
+    refetchInterval: 30000, // Atualizar a cada 30 segundos
+  });
+
+  // Handler para fechar notificação
+  const handleDismissNotification = async (notificationId: string) => {
+    try {
+      await dismissNotification(notificationId);
+      // Invalidar cache para atualizar a lista
+      queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] });
+    } catch (error) {
+      console.error('Error dismissing notification:', error);
+    }
+  };
 
   // Navigation items for the sidebar
   const navItems = [
@@ -225,6 +250,24 @@ const Home = () => {
 
           {/* Main Content */}
           <main className="flex flex-1 flex-col gap-8 p-8">
+            {/* Notifications Section */}
+            {notifications.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+                className="flex flex-col gap-3"
+              >
+                {notifications.map((notification) => (
+                  <NotificationBanner
+                    key={notification.id}
+                    notification={notification}
+                    onDismiss={handleDismissNotification}
+                  />
+                ))}
+              </motion.div>
+            )}
+
             {/* Welcome Section with Motion */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}

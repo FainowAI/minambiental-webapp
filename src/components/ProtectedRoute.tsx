@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Loader2, AlertCircle, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,7 @@ interface ProtectedRouteProps {
 
 const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
   const { user, isApproved, isCorpoTecnico, isLoading } = useAuth();
+  const navigate = useNavigate();
 
   // Show loading while checking auth status
   if (isLoading) {
@@ -42,7 +43,7 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
             Apenas usuários do <strong>Corpo Técnico</strong> podem acessar esta plataforma.
           </p>
           <Button 
-            onClick={() => window.location.href = '/'}
+            onClick={() => navigate('/')}
             variant="outline"
             className="border-gray-300 text-gray-700 hover:bg-gray-50"
           >

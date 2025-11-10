@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -7,6 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { useFormAutosave } from '@/hooks/useFormAutosave';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -62,6 +63,26 @@ const PhysicalChemicalAnalysisModal = ({
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Autosave hook
+  const autosaveKey = useMemo(() => `analysis_draft_${contractId}`, [contractId]);
+  const { restoreDraft, clearDraft } = useFormAutosave(autosaveKey, formData, {
+    enabled: isOpen,
+  });
+
+  // Restaurar rascunho ao abrir o modal
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const draft = restoreDraft();
+    if (draft) {
+      setFormData(draft);
+      toast({
+        title: 'Rascunho restaurado',
+        description: 'Os dados do formulário foram recuperados.',
+      });
+    }
+  }, [isOpen, restoreDraft, toast]);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -123,7 +144,8 @@ const PhysicalChemicalAnalysisModal = ({
       variant: 'default',
     });
 
-    // Reset form and close
+    // Limpar rascunho e resetar formulário
+    clearDraft();
     handleClose();
   };
 

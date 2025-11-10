@@ -9,10 +9,6 @@ import {
   User,
   ArrowLeft,
   Edit,
-  FileBarChart,
-  Beaker,
-  Droplets,
-  Gauge,
   Loader2,
 } from 'lucide-react';
 import {
@@ -60,11 +56,6 @@ import { getContractById, mapContractDataToFormValues, type ContractFormValues }
 import { getLicenseById } from '@/services/licenseService';
 import { maskCPF, maskPhone, maskCurrency, maskCEP } from '@/utils/masks';
 
-// Import modals (to be created)
-import PhysicalChemicalAnalysisModal from '@/components/modals/PhysicalChemicalAnalysisModal';
-import NDNEModal from '@/components/modals/NDNEModal';
-import MeterReadingModal from '@/components/modals/MeterReadingModal';
-
 interface LicenseData {
   id: string;
   numero_licenca: string;
@@ -79,11 +70,6 @@ const ViewContract = () => {
   const [licenseData, setLicenseData] = useState<LicenseData | null>(null);
   const [isLoadingContract, setIsLoadingContract] = useState(true);
   const [isLoadingLicense, setIsLoadingLicense] = useState(true);
-
-  // Modal states
-  const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
-  const [isNDNEModalOpen, setIsNDNEModalOpen] = useState(false);
-  const [isMeterModalOpen, setIsMeterModalOpen] = useState(false);
 
   // Fetch contract data
   useEffect(() => {
@@ -148,14 +134,6 @@ const ViewContract = () => {
 
   const handleEditContract = () => {
     navigate(`/edit-contract/${licenseId}/${contractId}`);
-  };
-
-  const handleGenerateReport = () => {
-    toast({
-      title: 'Função em desenvolvimento',
-      description: 'A geração de relatório será implementada em breve.',
-      variant: 'default',
-    });
   };
 
   const isLoading = isLoadingContract || isLoadingLicense;
@@ -847,65 +825,6 @@ const ViewContract = () => {
                     </div>
                   </div>
 
-                  <Separator />
-
-                  {/* Action Buttons Section */}
-                  <div className="space-y-6">
-                    <div className="flex items-center gap-3 pb-3 border-b border-gray-200">
-                      <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-emerald-100 to-teal-100 flex items-center justify-center">
-                        <FileBarChart className="h-5 w-5 text-emerald-600" />
-                      </div>
-                      <h2 className="text-xl font-semibold text-gray-900">Ações de Monitoramento</h2>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <Button
-                        onClick={handleGenerateReport}
-                        disabled
-                        className="h-14 justify-start gap-3 bg-gray-100 text-gray-400 cursor-not-allowed"
-                        title="Função será implementada em breve"
-                      >
-                        <FileBarChart className="h-5 w-5" />
-                        <div className="text-left">
-                          <div className="font-semibold">Gerar Relatório de Monitoramento</div>
-                          <div className="text-xs">Em desenvolvimento</div>
-                        </div>
-                      </Button>
-
-                      <Button
-                        onClick={() => setIsAnalysisModalOpen(true)}
-                        className="h-14 justify-start gap-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-700 hover:to-blue-800"
-                      >
-                        <Beaker className="h-5 w-5" />
-                        <div className="text-left">
-                          <div className="font-semibold">Informar Análise Físico-Química</div>
-                          <div className="text-xs opacity-90">Registrar análise de água</div>
-                        </div>
-                      </Button>
-
-                      <Button
-                        onClick={() => setIsNDNEModalOpen(true)}
-                        className="h-14 justify-start gap-3 bg-gradient-to-r from-cyan-600 to-cyan-700 text-white hover:from-cyan-700 hover:to-cyan-800"
-                      >
-                        <Droplets className="h-5 w-5" />
-                        <div className="text-left">
-                          <div className="font-semibold">Informar ND e NE</div>
-                          <div className="text-xs opacity-90">Níveis dinâmico e estático</div>
-                        </div>
-                      </Button>
-
-                      <Button
-                        onClick={() => setIsMeterModalOpen(true)}
-                        className="h-14 justify-start gap-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white hover:from-purple-700 hover:to-purple-800"
-                      >
-                        <Gauge className="h-5 w-5" />
-                        <div className="text-left">
-                          <div className="font-semibold">Apurar Hidrômetro e Horímetro</div>
-                          <div className="text-xs opacity-90">Registrar leituras mensais</div>
-                        </div>
-                      </Button>
-                    </div>
-                  </div>
                 </div>
 
                 {/* Footer with action buttons */}
@@ -924,25 +843,6 @@ const ViewContract = () => {
           </motion.div>
         </SidebarInset>
       </div>
-
-      {/* Modals */}
-      <PhysicalChemicalAnalysisModal
-        isOpen={isAnalysisModalOpen}
-        onClose={() => setIsAnalysisModalOpen(false)}
-        contractId={contractId || ''}
-      />
-
-      <NDNEModal
-        isOpen={isNDNEModalOpen}
-        onClose={() => setIsNDNEModalOpen(false)}
-        contractId={contractId || ''}
-      />
-
-      <MeterReadingModal
-        isOpen={isMeterModalOpen}
-        onClose={() => setIsMeterModalOpen(false)}
-        contractId={contractId || ''}
-      />
     </SidebarProvider>
   );
 };

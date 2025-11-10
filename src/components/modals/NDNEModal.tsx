@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -7,13 +7,34 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { useFormAutosave } from '@/hooks/useFormAutosave';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Droplets, Info } from 'lucide-react';
-import { Separator } from '@/components/ui/separator';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Droplets, ChevronsUpDown, Check } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { cn } from '@/lib/utils';
 
 interface NDNEModalProps {
   isOpen: boolean;
@@ -21,17 +42,73 @@ interface NDNEModalProps {
   contractId: string;
 }
 
+interface Tecnico {
+  id: string;
+  nome: string;
+}
+
 const NDNEModal = ({ isOpen, onClose, contractId }: NDNEModalProps) => {
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
-    neSecaMetros: '',
-    neChuvaMetros: '',
-    ndSecaMetros: '',
-    ndChuvaMetros: '',
+    periodo: '',
+    tecnicoId: '',
+    nd: '',
+    ne: '',
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [tecnicos, setTecnicos] = useState<Tecnico[]>([]);
+  const [loadingTecnicos, setLoadingTecnicos] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [openTecnicoCombobox, setOpenTecnicoCombobox] = useState(false);
+
+  // Autosave hook
+  const autosaveKey = useMemo(() => `ndne_draft_${contractId}`, [contractId]);
+  const { restoreDraft, clearDraft } = useFormAutosave(autosaveKey, formData, {
+    enabled: isOpen,
+  });
+
+  // Buscar técnicos aprovados e restaurar rascunho ao abrir o modal
+  useEffect(() => {
+    const fetchTecnicos = async () => {
+      if (!isOpen) return;
+
+      setLoadingTecnicos(true);
+      try {
+        const { data, error } = await supabase
+          .from('usuarios')
+          .select('id, nome')
+          .eq('perfil', 'Corpo Técnico')
+          .eq('status_aprovacao', 'Aprovado')
+          .order('nome');
+
+        if (error) throw error;
+        setTecnicos(data || []);
+
+        // Tentar restaurar rascunho
+        const draft = restoreDraft();
+        if (draft) {
+          setFormData(draft);
+          toast({
+            title: 'Rascunho restaurado',
+            description: 'Os dados do formulário foram recuperados.',
+          });
+        }
+      } catch (error) {
+        console.error('Erro ao buscar técnicos:', error);
+        toast({
+          title: 'Erro ao carregar técnicos',
+          description: 'Não foi possível carregar a lista de técnicos.',
+          variant: 'destructive',
+        });
+      } finally {
+        setLoadingTecnicos(false);
+      }
+    };
+
+    fetchTecnicos();
+  }, [isOpen, toast, restoreDraft]);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -48,50 +125,38 @@ const NDNEModal = ({ isOpen, onClose, contractId }: NDNEModalProps) => {
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
 
-    // All fields are required
-    if (!formData.neSecaMetros) {
-      newErrors.neSecaMetros = 'NE no período de seca é obrigatório';
-    } else if (isNaN(Number(formData.neSecaMetros)) || Number(formData.neSecaMetros) < 0) {
-      newErrors.neSecaMetros = 'Deve ser um número positivo';
+    if (!formData.periodo) {
+      newErrors.periodo = 'Selecione o período';
     }
 
-    if (!formData.neChuvaMetros) {
-      newErrors.neChuvaMetros = 'NE no período de chuva é obrigatório';
-    } else if (isNaN(Number(formData.neChuvaMetros)) || Number(formData.neChuvaMetros) < 0) {
-      newErrors.neChuvaMetros = 'Deve ser um número positivo';
+    if (!formData.tecnicoId) {
+      newErrors.tecnicoId = 'Selecione o técnico responsável';
     }
 
-    if (!formData.ndSecaMetros) {
-      newErrors.ndSecaMetros = 'ND no período de seca é obrigatório';
-    } else if (isNaN(Number(formData.ndSecaMetros)) || Number(formData.ndSecaMetros) < 0) {
-      newErrors.ndSecaMetros = 'Deve ser um número positivo';
+    if (!formData.ne) {
+      newErrors.ne = 'NE é obrigatório';
+    } else if (isNaN(Number(formData.ne)) || Number(formData.ne) < 0) {
+      newErrors.ne = 'Deve ser um número positivo';
     }
 
-    if (!formData.ndChuvaMetros) {
-      newErrors.ndChuvaMetros = 'ND no período de chuva é obrigatório';
-    } else if (isNaN(Number(formData.ndChuvaMetros)) || Number(formData.ndChuvaMetros) < 0) {
-      newErrors.ndChuvaMetros = 'Deve ser um número positivo';
+    if (!formData.nd) {
+      newErrors.nd = 'ND é obrigatório';
+    } else if (isNaN(Number(formData.nd)) || Number(formData.nd) < 0) {
+      newErrors.nd = 'Deve ser um número positivo';
     }
 
-    // Validate that ND >= NE (Nível Dinâmico deve ser maior ou igual ao Estático)
-    const neSeca = Number(formData.neSecaMetros);
-    const ndSeca = Number(formData.ndSecaMetros);
-    const neChuva = Number(formData.neChuvaMetros);
-    const ndChuva = Number(formData.ndChuvaMetros);
-
-    if (!isNaN(neSeca) && !isNaN(ndSeca) && ndSeca < neSeca) {
-      newErrors.ndSecaMetros = 'ND deve ser maior ou igual a NE';
-    }
-
-    if (!isNaN(neChuva) && !isNaN(ndChuva) && ndChuva < neChuva) {
-      newErrors.ndChuvaMetros = 'ND deve ser maior ou igual a NE';
+    // ND deve ser >= NE
+    const ne = Number(formData.ne);
+    const nd = Number(formData.nd);
+    if (!isNaN(ne) && !isNaN(nd) && nd < ne) {
+      newErrors.nd = 'ND deve ser maior ou igual a NE';
     }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!validateForm()) {
@@ -103,23 +168,56 @@ const NDNEModal = ({ isOpen, onClose, contractId }: NDNEModalProps) => {
       return;
     }
 
-    // Simulate success (no Supabase integration yet)
-    toast({
-      title: 'Níveis registrados com sucesso!',
-      description: `Os valores de ND e NE foram registrados para o contrato ${contractId}.`,
-      variant: 'default',
-    });
+    setIsSubmitting(true);
 
-    // Reset form and close
-    handleClose();
+    try {
+      // Buscar nome do técnico selecionado
+      const tecnicoSelecionado = tecnicos.find((t) => t.id === formData.tecnicoId);
+
+      // Buscar usuário autenticado
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      const { error } = await (supabase as any)
+        .from('contrato_nd_ne')
+        .insert({
+          contrato_id: contractId,
+          periodo: formData.periodo,
+          nivel_estatico: Number(formData.ne),
+          nivel_dinamico: Number(formData.nd),
+          responsavel: tecnicoSelecionado?.nome || '',
+          data_medicao: new Date().toISOString().split('T')[0],
+          created_by: user?.id,
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: 'Níveis registrados com sucesso!',
+        description: `ND: ${formData.nd}m | NE: ${formData.ne}m | Período: ${formData.periodo === 'seca' ? 'Seca' : 'Chuva'}`,
+      });
+
+      clearDraft();
+      handleClose();
+    } catch (error: any) {
+      console.error('Erro ao salvar ND/NE:', error);
+      toast({
+        title: 'Erro ao salvar',
+        description: error.message || 'Tente novamente mais tarde.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleClose = () => {
     setFormData({
-      neSecaMetros: '',
-      neChuvaMetros: '',
-      ndSecaMetros: '',
-      ndChuvaMetros: '',
+      periodo: '',
+      tecnicoId: '',
+      nd: '',
+      ne: '',
     });
     setErrors({});
     onClose();
@@ -127,165 +225,162 @@ const NDNEModal = ({ isOpen, onClose, contractId }: NDNEModalProps) => {
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-cyan-100 to-cyan-200 flex items-center justify-center">
-              <Droplets className="h-5 w-5 text-cyan-600" />
+            <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-emerald-100 to-teal-200 flex items-center justify-center">
+              <Droplets className="h-5 w-5 text-emerald-600" />
             </div>
             <div>
-              <DialogTitle className="text-2xl">Informar ND e NE</DialogTitle>
+              <DialogTitle className="text-xl">Informar Nd(m) e Ne(m)</DialogTitle>
               <DialogDescription>
-                Registre os níveis dinâmico e estático nos períodos de seca e chuva
+                Registre os níveis dinâmico e estático para o período selecionado
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6 mt-4">
-          {/* Info Alert */}
-          <Alert className="bg-blue-50 border-blue-200">
-            <Info className="h-4 w-4 text-blue-600" />
-            <AlertDescription className="text-sm text-gray-700">
-              <strong>NE (Nível Estático):</strong> Profundidade do nível da água quando o poço está em
-              repouso (bomba desligada).
-              <br />
-              <strong>ND (Nível Dinâmico):</strong> Profundidade do nível da água quando o poço está
-              bombeando água.
-            </AlertDescription>
-          </Alert>
-
-          {/* Período de Seca */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-3 pb-3 border-b border-gray-200">
-              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-orange-100 to-orange-200 flex items-center justify-center">
-                <Droplets className="h-4 w-4 text-orange-600" />
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900">Período de Seca</h3>
+          {/* Linha 1: Período e Técnico */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Dropdown Período */}
+            <div className="space-y-2">
+              <Label htmlFor="periodo" className="text-sm font-medium">
+                Período *
+              </Label>
+              <Select
+                value={formData.periodo}
+                onValueChange={(value) => handleInputChange('periodo', value)}
+              >
+                <SelectTrigger
+                  className={`h-11 ${errors.periodo ? 'border-red-500' : ''}`}
+                >
+                  <SelectValue placeholder="Selecione" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="seca">Seca</SelectItem>
+                  <SelectItem value="chuva">Chuva</SelectItem>
+                </SelectContent>
+              </Select>
+              {errors.periodo && (
+                <p className="text-xs text-red-500">{errors.periodo}</p>
+              )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="neSecaMetros" className="text-sm font-medium">
-                  Nível Estático (NE) - Metros *
-                </Label>
-                <div className="relative">
-                  <Input
-                    id="neSecaMetros"
-                    type="number"
-                    step="0.01"
-                    value={formData.neSecaMetros}
-                    onChange={(e) => handleInputChange('neSecaMetros', e.target.value)}
-                    placeholder="Ex: 15.50"
-                    className={`h-11 pr-12 ${errors.neSecaMetros ? 'border-red-500' : ''}`}
-                    required
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">
-                    m
-                  </span>
-                </div>
-                {errors.neSecaMetros && (
-                  <p className="text-xs text-red-500">{errors.neSecaMetros}</p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="ndSecaMetros" className="text-sm font-medium">
-                  Nível Dinâmico (ND) - Metros *
-                </Label>
-                <div className="relative">
-                  <Input
-                    id="ndSecaMetros"
-                    type="number"
-                    step="0.01"
-                    value={formData.ndSecaMetros}
-                    onChange={(e) => handleInputChange('ndSecaMetros', e.target.value)}
-                    placeholder="Ex: 20.75"
-                    className={`h-11 pr-12 ${errors.ndSecaMetros ? 'border-red-500' : ''}`}
-                    required
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">
-                    m
-                  </span>
-                </div>
-                {errors.ndSecaMetros && (
-                  <p className="text-xs text-red-500">{errors.ndSecaMetros}</p>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <Separator />
-
-          {/* Período de Chuva */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-3 pb-3 border-b border-gray-200">
-              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center">
-                <Droplets className="h-4 w-4 text-blue-600" />
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900">Período de Chuva</h3>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="neChuvaMetros" className="text-sm font-medium">
-                  Nível Estático (NE) - Metros *
-                </Label>
-                <div className="relative">
-                  <Input
-                    id="neChuvaMetros"
-                    type="number"
-                    step="0.01"
-                    value={formData.neChuvaMetros}
-                    onChange={(e) => handleInputChange('neChuvaMetros', e.target.value)}
-                    placeholder="Ex: 10.25"
-                    className={`h-11 pr-12 ${errors.neChuvaMetros ? 'border-red-500' : ''}`}
-                    required
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">
-                    m
-                  </span>
-                </div>
-                {errors.neChuvaMetros && (
-                  <p className="text-xs text-red-500">{errors.neChuvaMetros}</p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="ndChuvaMetros" className="text-sm font-medium">
-                  Nível Dinâmico (ND) - Metros *
-                </Label>
-                <div className="relative">
-                  <Input
-                    id="ndChuvaMetros"
-                    type="number"
-                    step="0.01"
-                    value={formData.ndChuvaMetros}
-                    onChange={(e) => handleInputChange('ndChuvaMetros', e.target.value)}
-                    placeholder="Ex: 18.50"
-                    className={`h-11 pr-12 ${errors.ndChuvaMetros ? 'border-red-500' : ''}`}
-                    required
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">
-                    m
-                  </span>
-                </div>
-                {errors.ndChuvaMetros && (
-                  <p className="text-xs text-red-500">{errors.ndChuvaMetros}</p>
-                )}
-              </div>
+            {/* Dropdown Técnico com Busca */}
+            <div className="space-y-2">
+              <Label htmlFor="tecnico" className="text-sm font-medium">
+                Técnico *
+              </Label>
+              <Popover open={openTecnicoCombobox} onOpenChange={setOpenTecnicoCombobox}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={openTecnicoCombobox}
+                    className={cn(
+                      'h-11 w-full justify-between',
+                      errors.tecnicoId && 'border-red-500',
+                      !formData.tecnicoId && 'text-muted-foreground'
+                    )}
+                    disabled={loadingTecnicos}
+                  >
+                    {loadingTecnicos
+                      ? 'Carregando...'
+                      : formData.tecnicoId
+                      ? tecnicos.find((t) => t.id === formData.tecnicoId)?.nome
+                      : 'Selecione'}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0 bg-popover z-50" align="start">
+                  <Command className="bg-popover">
+                    <CommandInput placeholder="Pesquisar técnico..." className="h-9" />
+                    <CommandList className="bg-popover">
+                      <CommandEmpty>Nenhum técnico encontrado.</CommandEmpty>
+                      <CommandGroup className="bg-popover">
+                        {tecnicos.map((tecnico) => (
+                          <CommandItem
+                            key={tecnico.id}
+                            value={tecnico.nome}
+                            onSelect={() => {
+                              handleInputChange('tecnicoId', tecnico.id);
+                              setOpenTecnicoCombobox(false);
+                            }}
+                            className="bg-popover hover:bg-accent"
+                          >
+                            <Check
+                              className={cn(
+                                'mr-2 h-4 w-4',
+                                formData.tecnicoId === tecnico.id
+                                  ? 'opacity-100'
+                                  : 'opacity-0'
+                              )}
+                            />
+                            {tecnico.nome}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+              {errors.tecnicoId && (
+                <p className="text-xs text-red-500">{errors.tecnicoId}</p>
+              )}
             </div>
           </div>
 
+          {/* Linha 2: ND e NE */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Campo ND */}
+            <div className="space-y-2">
+              <Label htmlFor="nd" className="text-sm font-medium">
+                Nd (m) *
+              </Label>
+              <Input
+                id="nd"
+                type="number"
+                step="0.01"
+                value={formData.nd}
+                onChange={(e) => handleInputChange('nd', e.target.value)}
+                placeholder="0"
+                className={`h-11 ${errors.nd ? 'border-red-500' : ''}`}
+                required
+              />
+              {errors.nd && <p className="text-xs text-red-500">{errors.nd}</p>}
+            </div>
+
+            {/* Campo NE */}
+            <div className="space-y-2">
+              <Label htmlFor="ne" className="text-sm font-medium">
+                Ne (m) *
+              </Label>
+              <Input
+                id="ne"
+                type="number"
+                step="0.01"
+                value={formData.ne}
+                onChange={(e) => handleInputChange('ne', e.target.value)}
+                placeholder="0"
+                className={`h-11 ${errors.ne ? 'border-red-500' : ''}`}
+                required
+              />
+              {errors.ne && <p className="text-xs text-red-500">{errors.ne}</p>}
+            </div>
+          </div>
+
+          {/* Botões de Ação */}
           <DialogFooter className="gap-2">
             <Button type="button" variant="outline" onClick={handleClose}>
               Cancelar
             </Button>
             <Button
               type="submit"
-              className="bg-gradient-to-r from-cyan-600 to-cyan-700 text-white hover:from-cyan-700 hover:to-cyan-800"
+              disabled={isSubmitting}
+              className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700"
             >
-              Salvar Níveis
+              {isSubmitting ? 'Salvando...' : 'Salvar'}
             </Button>
           </DialogFooter>
         </form>

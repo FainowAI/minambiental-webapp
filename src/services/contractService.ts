@@ -81,7 +81,7 @@ export interface ContractData {
   cep_contrato: string | null;
   rua: string | null;
   bairro: string | null;
-  numero: string | null;
+  numero_endereco: string | null;
   cidade: string | null;
   estado: string | null;
   pais: string | null;
@@ -200,6 +200,7 @@ function mapPayloadToDatabaseRecord(
   const record: Record<string, any> = {};
 
   const mapping: Record<keyof Partial<CreateContractPayload>, string> = {
+    licencaId: 'licenca_id',
     numero: 'numero',
     celebradoEm: 'celebrado_em',
     valor: 'valor',
@@ -304,7 +305,7 @@ export function mapContractDataToFormValues(contract: ContractData): ContractFor
     cepContrato: maskCEP(contract.cep_contrato ?? ''),
     ruaContrato: contract.rua ?? '',
     bairroContrato: contract.bairro ?? '',
-    numeroContrato: contract.numero ?? '',
+    numeroContrato: contract.numero_endereco ?? '',
     cidadeContrato: contract.cidade ?? '',
     estadoContrato: contract.estado ?? '',
     paisContrato: contract.pais ?? '',

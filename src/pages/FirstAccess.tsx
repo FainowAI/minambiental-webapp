@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { useFormAutosave } from '@/hooks/useFormAutosave';
+import { useUnsavedChangesPrompt } from '@/hooks/useUnsavedChangesPrompt';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -37,6 +39,55 @@ const FirstAccess = () => {
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Dados do formulário sem senhas para autosave (segurança)
+  const formDataForAutosave = {
+    nome: formData.nome,
+    email: formData.email,
+    cpf: formData.cpf,
+    celular: formData.celular,
+  };
+
+  // Autosave hook (excluindo senhas por segurança)
+  const autosaveKey = 'first_access_draft';
+  const { restoreDraft, clearDraft } = useFormAutosave(autosaveKey, formDataForAutosave, {
+    enabled: true,
+    debounceMs: 400,
+  });
+
+  // Função para verificar se há alterações
+  const isDirty = () => {
+    return (
+      formData.nome.trim() !== '' ||
+      formData.email.trim() !== '' ||
+      formData.cpf.trim() !== '' ||
+      formData.celular.trim() !== ''
+    );
+  };
+
+  // Aviso de alterações não salvas
+  useUnsavedChangesPrompt({
+    when: isDirty(),
+    message: 'Você tem alterações não salvas. Deseja realmente sair?',
+  });
+
+  // Restaurar rascunho ao montar componente
+  useEffect(() => {
+    const draft = restoreDraft();
+    if (draft) {
+      setFormData(prev => ({
+        ...prev,
+        nome: draft.nome || '',
+        email: draft.email || '',
+        cpf: draft.cpf || '',
+        celular: draft.celular || '',
+      }));
+      toast({
+        title: 'Rascunho restaurado',
+        description: 'Seus dados foram recuperados.',
+      });
+    }
+  }, [restoreDraft]);
 
   const formatCPF = (value: string) => {
     const numbers = value.replace(/\D/g, '');
@@ -119,6 +170,7 @@ const FirstAccess = () => {
           description: 'Verifique seu email para confirmar o cadastro. Após confirmação, aguarde aprovação de um administrador.',
         });
 
+        clearDraft();
         setTimeout(() => {
           navigate('/');
         }, 3000);
