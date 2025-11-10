@@ -9,6 +9,15 @@ export interface RequerenteReading {
   created_at: string | null;
 }
 
+export interface CorpoTecnicoApuracao {
+  id: string;
+  hidrometro_leitura_atual: number | null;
+  horimetro_leitura_atual: number | null;
+  data_leitura: string;
+  observacoes: string | null;
+  created_at: string | null;
+}
+
 /**
  * Verifica se existe leitura do requerente para o mês atual
  * @param licenseId ID da licença
@@ -93,5 +102,82 @@ export const getRequerenteReadingWithImages = async (
   licenseId: string
 ): Promise<RequerenteReading | null> => {
   return await checkRequerenteReading(licenseId);
+};
+
+/**
+ * Verifica se existe apuração do corpo técnico para o mês atual
+ * @param licenseId ID da licença
+ * @returns Apuração do corpo técnico ou null se não existir
+ */
+export const checkCorpoTecnicoApuracao = async (
+  licenseId: string
+): Promise<CorpoTecnicoApuracao | null> => {
+  try {
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1;
+    const currentYear = now.getFullYear();
+
+    // Buscar todos os usuários do corpo técnico ativos
+    const { data: corpoTecnico } = await supabase
+      .from('usuarios')
+      .select('auth_user_id')
+      .eq('perfil', 'Corpo Técnico')
+      .eq('status', 'Ativo')
+      .eq('status_aprovacao', 'Aprovado');
+
+    if (!corpoTecnico || corpoTecnico.length === 0) {
+      return null;
+    }
+
+    const corpoTecnicoAuthIds = corpoTecnico
+      .map((ct) => ct.auth_user_id)
+      .filter((id): id is string => id !== null);
+
+    if (corpoTecnicoAuthIds.length === 0) {
+      return null;
+    }
+
+    // Buscar monitoramentos do mês atual criados pelo corpo técnico com status finalizado
+    const { data: monitoramento, error } = await supabase
+      .from('monitoramentos')
+      .select(`
+        id,
+        hidrometro_leitura_atual,
+        horimetro_leitura_atual,
+        data_leitura,
+        observacoes,
+        created_at,
+        usuario_id
+      `)
+      .eq('licenca_id', licenseId)
+      .eq('mes', currentMonth)
+      .eq('ano', currentYear)
+      .eq('status', 'finalizado')
+      .in('usuario_id', corpoTecnicoAuthIds)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Error fetching corpo técnico apuracao:', error);
+      throw error;
+    }
+
+    if (!monitoramento) {
+      return null;
+    }
+
+    return {
+      id: monitoramento.id,
+      hidrometro_leitura_atual: monitoramento.hidrometro_leitura_atual,
+      horimetro_leitura_atual: monitoramento.horimetro_leitura_atual,
+      data_leitura: monitoramento.data_leitura,
+      observacoes: monitoramento.observacoes,
+      created_at: monitoramento.created_at,
+    };
+  } catch (error) {
+    console.error('Error in checkCorpoTecnicoApuracao:', error);
+    throw error;
+  }
 };
 

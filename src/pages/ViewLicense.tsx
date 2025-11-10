@@ -72,6 +72,16 @@ import { getLicenseById } from '@/services/licenseService';
 import { getContractsByLicenseId } from '@/services/contractService';
 import { useToast } from '@/hooks/use-toast';
 import { generateMonitoringReport } from '@/services/reportService';
+import { checkRequerenteReading, checkCorpoTecnicoApuracao } from '@/services/monitoringService';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 // Modals
 import PhysicalChemicalAnalysisModal from '@/components/modals/PhysicalChemicalAnalysisModal';
@@ -116,6 +126,9 @@ const ViewLicense = () => {
   const [isNDNEModalOpen, setIsNDNEModalOpen] = useState(false);
   const [isMeterModalOpen, setIsMeterModalOpen] = useState(false);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [showNoReadingDialog, setShowNoReadingDialog] = useState(false);
+  const [existingApuracaoId, setExistingApuracaoId] = useState<string | null>(null);
+  const [hasExistingApuracao, setHasExistingApuracao] = useState(false);
 
   // Navigation items for the sidebar
   const navItems = [
@@ -957,12 +970,51 @@ const ViewLicense = () => {
                         </Button>
 
                         <Button
-                          onClick={() => setIsMeterModalOpen(true)}
+                          onClick={async () => {
+                            if (!id) {
+                              toast({
+                                title: 'Erro',
+                                description: 'Não foi possível identificar a licença.',
+                                variant: 'destructive',
+                              });
+                              return;
+                            }
+
+                            // Verificar se existe leitura do requerente
+                            try {
+                              const requerenteReading = await checkRequerenteReading(id);
+                              if (!requerenteReading) {
+                                setShowNoReadingDialog(true);
+                                return;
+                              }
+
+                              // Verificar se existe apuração do corpo técnico
+                              const corpoTecnicoApuracao = await checkCorpoTecnicoApuracao(id);
+                              if (corpoTecnicoApuracao) {
+                                setExistingApuracaoId(corpoTecnicoApuracao.id);
+                                setHasExistingApuracao(true);
+                              } else {
+                                setExistingApuracaoId(null);
+                                setHasExistingApuracao(false);
+                              }
+
+                              setIsMeterModalOpen(true);
+                            } catch (error) {
+                              console.error('Error checking requerente reading:', error);
+                              toast({
+                                title: 'Erro',
+                                description: 'Não foi possível verificar a leitura do requerente.',
+                                variant: 'destructive',
+                              });
+                            }
+                          }}
                           className="h-12 justify-start gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700"
                         >
                           <Gauge className="h-5 w-5 flex-shrink-0" />
                           <div className="text-left">
-                            <div className="font-semibold text-sm">Hidrômetro/Horímetro</div>
+                            <div className="font-semibold text-sm">
+                              {hasExistingApuracao ? 'Editar Hidrômetro/Horímetro' : 'Hidrômetro/Horímetro'}
+                            </div>
                             <div className="text-xs opacity-90">Leituras mensais</div>
                           </div>
                         </Button>
@@ -1136,10 +1188,29 @@ const ViewLicense = () => {
           <MeterReadingModal
             isOpen={isMeterModalOpen}
             onClose={() => setIsMeterModalOpen(false)}
-            contractId={getActiveContract()?.id || ''}
+            licenseId={id || ''}
+            existingApuracaoId={existingApuracaoId}
           />
         </>
       )}
+
+      {/* Alert Dialog para leitura não disponível */}
+      <AlertDialog open={showNoReadingDialog} onOpenChange={setShowNoReadingDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Leitura Mensal Não Disponível</AlertDialogTitle>
+            <AlertDialogDescription>
+              A leitura mensal do hidrômetro e horímetro do requerente ainda não foi realizada para este mês.
+              É necessário que o requerente faça a leitura antes que o corpo técnico possa realizar a apuração.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setShowNoReadingDialog(false)}>
+              Entendi
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </SidebarProvider>
   );
 };

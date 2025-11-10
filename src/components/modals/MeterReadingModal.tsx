@@ -21,7 +21,8 @@ import { createNotificationForRequerente } from '@/services/notificationService'
 interface MeterReadingModalProps {
   isOpen: boolean;
   onClose: () => void;
-  contractId: string;
+  licenseId: string;
+  existingApuracaoId?: string | null;
 }
 
 interface ImageData {
@@ -30,7 +31,7 @@ interface ImageData {
   id: string;
 }
 
-const MeterReadingModal = ({ isOpen, onClose, contractId }: MeterReadingModalProps) => {
+const MeterReadingModal = ({ isOpen, onClose, licenseId, existingApuracaoId }: MeterReadingModalProps) => {
   const { toast } = useToast();
   const { user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -44,10 +45,10 @@ const MeterReadingModal = ({ isOpen, onClose, contractId }: MeterReadingModalPro
 
   const [images, setImages] = useState<ImageData[]>([]);
   const [requerenteImages, setRequerenteImages] = useState<string[]>([]);
+  const [existingApuracaoImages, setExistingApuracaoImages] = useState<string[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(false);
-  const [licenseId, setLicenseId] = useState<string | null>(null);
   const [requerenteReading, setRequerenteReading] = useState<RequerenteReading | null>(null);
   const [requerenteReadingId, setRequerenteReadingId] = useState<string | null>(null);
   const [previousReading, setPreviousReading] = useState<{
@@ -55,98 +56,121 @@ const MeterReadingModal = ({ isOpen, onClose, contractId }: MeterReadingModalPro
     horimetro: number | null;
   } | null>(null);
 
-  // Buscar licenca_id do contrato, leitura do requerente e leitura anterior
+  // Buscar leitura do requerente e leitura anterior
   useEffect(() => {
-    if (isOpen && contractId) {
-      const fetchContractData = async () => {
+    if (isOpen && licenseId) {
+      const fetchReadingData = async () => {
         setIsLoadingData(true);
         try {
-          // Buscar licenca_id do contrato
-          const { data: contract, error: contractError } = await supabase
-            .from('contratos')
-            .select('licenca_id')
-            .eq('id', contractId)
-            .single();
+          // Buscar leitura do requerente do mês atual
+          const requerenteReadingData = await checkRequerenteReading(licenseId);
+          if (requerenteReadingData) {
+            setRequerenteReading(requerenteReadingData);
+            setRequerenteReadingId(requerenteReadingData.id);
+            
+            // Preencher campos declarados com dados do requerente
+            setFormData((prev) => ({
+              ...prev,
+              leituraDeclarada: requerenteReadingData.hidrometro_leitura_atual?.toFixed(2) || '',
+              horaDeclarada: requerenteReadingData.horimetro_leitura_atual?.toFixed(2) || '',
+            }));
 
-          if (contractError) {
-            console.error('Error fetching contract:', contractError);
-            setIsLoadingData(false);
-            return;
+            // Buscar imagens do requerente (se houver campo de imagem)
+            // Por enquanto, vamos usar o campo observacoes se contiver URLs de imagens
+            // ou podemos criar uma tabela separada para imagens
+            if (requerenteReadingData.observacoes) {
+              try {
+                const parsed = JSON.parse(requerenteReadingData.observacoes);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                  // Verificar se são URLs válidas
+                  const validUrls = parsed.filter((url: any) => 
+                    typeof url === 'string' && (url.startsWith('http') || url.startsWith('data:'))
+                  );
+                  if (validUrls.length > 0) {
+                    setRequerenteImages(validUrls);
+                  }
+                }
+              } catch {
+                // Se não for JSON, verificar se é uma URL única
+                if (requerenteReadingData.observacoes.startsWith('http') || 
+                    requerenteReadingData.observacoes.startsWith('data:')) {
+                  setRequerenteImages([requerenteReadingData.observacoes]);
+                }
+              }
+            }
           }
 
-          if (contract?.licenca_id) {
-            setLicenseId(contract.licenca_id);
+          // Buscar última leitura do mês anterior (para cálculo de consumo)
+          const now = new Date();
+          const currentMonth = now.getMonth() + 1;
+          const currentYear = now.getFullYear();
+          
+          // Buscar leitura do mês anterior
+          let previousMonth = currentMonth - 1;
+          let previousYear = currentYear;
+          if (previousMonth === 0) {
+            previousMonth = 12;
+            previousYear = currentYear - 1;
+          }
 
-            // Buscar leitura do requerente do mês atual
-            const requerenteReadingData = await checkRequerenteReading(contract.licenca_id);
-            if (requerenteReadingData) {
-              setRequerenteReading(requerenteReadingData);
-              setRequerenteReadingId(requerenteReadingData.id);
-              
-              // Preencher campos declarados com dados do requerente
+          const { data: previousMonitoramento } = await supabase
+            .from('monitoramentos')
+            .select('hidrometro_leitura_atual, horimetro_leitura_atual')
+            .eq('licenca_id', licenseId)
+            .eq('mes', previousMonth)
+            .eq('ano', previousYear)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+
+          if (previousMonitoramento) {
+            setPreviousReading({
+              hidrometro: previousMonitoramento.hidrometro_leitura_atual,
+              horimetro: previousMonitoramento.horimetro_leitura_atual,
+            });
+          }
+
+          // Se existir apuração, carregar seus dados
+          if (existingApuracaoId) {
+            const { data: apuracaoData, error: apuracaoError } = await supabase
+              .from('monitoramentos')
+              .select('hidrometro_leitura_atual, horimetro_leitura_atual, observacoes')
+              .eq('id', existingApuracaoId)
+              .single();
+
+            if (apuracaoError) {
+              console.error('Error fetching existing apuracao:', apuracaoError);
+            } else if (apuracaoData) {
+              // Preencher campos apurados com valores existentes
               setFormData((prev) => ({
                 ...prev,
-                leituraDeclarada: requerenteReadingData.hidrometro_leitura_atual?.toFixed(2) || '',
-                horaDeclarada: requerenteReadingData.horimetro_leitura_atual?.toFixed(2) || '',
+                leituraApurada: apuracaoData.hidrometro_leitura_atual?.toFixed(2) || '',
+                horaApurada: apuracaoData.horimetro_leitura_atual?.toFixed(2) || '',
               }));
 
-              // Buscar imagens do requerente (se houver campo de imagem)
-              // Por enquanto, vamos usar o campo observacoes se contiver URLs de imagens
-              // ou podemos criar uma tabela separada para imagens
-              if (requerenteReadingData.observacoes) {
+              // Carregar imagens da apuração existente
+              if (apuracaoData.observacoes) {
                 try {
-                  const parsed = JSON.parse(requerenteReadingData.observacoes);
+                  const parsed = JSON.parse(apuracaoData.observacoes);
                   if (Array.isArray(parsed) && parsed.length > 0) {
-                    // Verificar se são URLs válidas
                     const validUrls = parsed.filter((url: any) => 
                       typeof url === 'string' && (url.startsWith('http') || url.startsWith('data:'))
                     );
                     if (validUrls.length > 0) {
-                      setRequerenteImages(validUrls);
+                      setExistingApuracaoImages(validUrls);
                     }
                   }
                 } catch {
-                  // Se não for JSON, verificar se é uma URL única
-                  if (requerenteReadingData.observacoes.startsWith('http') || 
-                      requerenteReadingData.observacoes.startsWith('data:')) {
-                    setRequerenteImages([requerenteReadingData.observacoes]);
+                  if (apuracaoData.observacoes.startsWith('http') || 
+                      apuracaoData.observacoes.startsWith('data:')) {
+                    setExistingApuracaoImages([apuracaoData.observacoes]);
                   }
                 }
               }
             }
-
-            // Buscar última leitura do mês anterior (para cálculo de consumo)
-            const now = new Date();
-            const currentMonth = now.getMonth() + 1;
-            const currentYear = now.getFullYear();
-            
-            // Buscar leitura do mês anterior
-            let previousMonth = currentMonth - 1;
-            let previousYear = currentYear;
-            if (previousMonth === 0) {
-              previousMonth = 12;
-              previousYear = currentYear - 1;
-            }
-
-            const { data: previousMonitoramento } = await supabase
-              .from('monitoramentos')
-              .select('hidrometro_leitura_atual, horimetro_leitura_atual')
-              .eq('licenca_id', contract.licenca_id)
-              .eq('mes', previousMonth)
-              .eq('ano', previousYear)
-              .order('created_at', { ascending: false })
-              .limit(1)
-              .single();
-
-            if (previousMonitoramento) {
-              setPreviousReading({
-                hidrometro: previousMonitoramento.hidrometro_leitura_atual,
-                horimetro: previousMonitoramento.horimetro_leitura_atual,
-              });
-            }
           }
         } catch (error) {
-          console.error('Error fetching contract data:', error);
+          console.error('Error fetching reading data:', error);
           toast({
             title: 'Erro',
             description: 'Não foi possível carregar os dados da leitura.',
@@ -157,12 +181,12 @@ const MeterReadingModal = ({ isOpen, onClose, contractId }: MeterReadingModalPro
         }
       };
 
-      fetchContractData();
+      fetchReadingData();
     }
-  }, [isOpen, contractId, toast]);
+  }, [isOpen, licenseId, existingApuracaoId, toast]);
 
   // Autosave hook
-  const autosaveKey = useMemo(() => `meter_draft_${contractId}`, [contractId]);
+  const autosaveKey = useMemo(() => `meter_draft_${licenseId}`, [licenseId]);
   const { restoreDraft, clearDraft } = useFormAutosave(autosaveKey, formData, {
     enabled: isOpen,
   });
@@ -316,46 +340,78 @@ const MeterReadingModal = ({ isOpen, onClose, contractId }: MeterReadingModalPro
         ? horimetroLeituraAtual - horimetroLeituraAnterior 
         : null;
 
-      // Preparar imagens para salvar (se houver)
-      const imageUrls: string[] = images.map((img) => img.preview);
+      // Preparar imagens para salvar (novas imagens + imagens existentes da apuração)
+      const newImageUrls: string[] = images.map((img) => img.preview);
+      const allImageUrls = existingApuracaoId 
+        ? [...existingApuracaoImages, ...newImageUrls]
+        : newImageUrls;
 
-      // Inserir monitoramento com status "finalizado"
-      // IMPORTANTE: usuario_id deve ser auth.uid() (user.id) para satisfazer a RLS policy
-      const { error: insertError } = await supabase
-        .from('monitoramentos')
-        .insert({
-          licenca_id: licenseId,
-          usuario_id: user.id,
-          mes,
-          ano,
-          data_leitura: dataLeitura,
-          hidrometro_leitura_anterior: hidrometroLeituraAnterior,
-          hidrometro_leitura_atual: hidrometroLeituraAtual,
-          hidrometro_consumo: hidrometroConsumo,
-          horimetro_leitura_anterior: horimetroLeituraAnterior,
-          horimetro_leitura_atual: horimetroLeituraAtual,
-          horimetro_horas_operacao: horimetroHorasOperacao,
-          status: 'finalizado',
-          observacoes: imageUrls.length > 0 ? JSON.stringify(imageUrls) : null,
-        });
-
-      if (insertError) {
-        throw insertError;
-      }
-
-      // Atualizar status da leitura do requerente para "aprovado" ou similar
-      if (requerenteReadingId) {
-        await supabase
+      if (existingApuracaoId) {
+        // Modo edição: UPDATE na apuração existente
+        const { error: updateError } = await supabase
           .from('monitoramentos')
-          .update({ status: 'aprovado' })
-          .eq('id', requerenteReadingId);
-      }
+          .update({
+            data_leitura: dataLeitura,
+            hidrometro_leitura_anterior: hidrometroLeituraAnterior,
+            hidrometro_leitura_atual: hidrometroLeituraAtual,
+            hidrometro_consumo: hidrometroConsumo,
+            horimetro_leitura_anterior: horimetroLeituraAnterior,
+            horimetro_leitura_atual: horimetroLeituraAtual,
+            horimetro_horas_operacao: horimetroHorasOperacao,
+            status: 'finalizado',
+            observacoes: allImageUrls.length > 0 ? JSON.stringify(allImageUrls) : null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existingApuracaoId);
 
-      toast({
-        title: 'Leituras registradas com sucesso!',
-        description: `As leituras foram registradas para o contrato ${contractId}.`,
-        variant: 'default',
-      });
+        if (updateError) {
+          throw updateError;
+        }
+
+        toast({
+          title: 'Apuração atualizada com sucesso!',
+          description: `As leituras foram atualizadas para a licença.`,
+          variant: 'default',
+        });
+      } else {
+        // Modo criação: INSERT novo monitoramento
+        // IMPORTANTE: usuario_id deve ser auth.uid() (user.id) para satisfazer a RLS policy
+        const { error: insertError } = await supabase
+          .from('monitoramentos')
+          .insert({
+            licenca_id: licenseId,
+            usuario_id: user.id,
+            mes,
+            ano,
+            data_leitura: dataLeitura,
+            hidrometro_leitura_anterior: hidrometroLeituraAnterior,
+            hidrometro_leitura_atual: hidrometroLeituraAtual,
+            hidrometro_consumo: hidrometroConsumo,
+            horimetro_leitura_anterior: horimetroLeituraAnterior,
+            horimetro_leitura_atual: horimetroLeituraAtual,
+            horimetro_horas_operacao: horimetroHorasOperacao,
+            status: 'finalizado',
+            observacoes: allImageUrls.length > 0 ? JSON.stringify(allImageUrls) : null,
+          });
+
+        if (insertError) {
+          throw insertError;
+        }
+
+        // Atualizar status da leitura do requerente para "aprovado"
+        if (requerenteReadingId) {
+          await supabase
+            .from('monitoramentos')
+            .update({ status: 'aprovado' })
+            .eq('id', requerenteReadingId);
+        }
+
+        toast({
+          title: 'Leituras registradas com sucesso!',
+          description: `As leituras foram registradas para a licença.`,
+          variant: 'default',
+        });
+      }
 
       // Limpar rascunho
       clearDraft();
@@ -440,8 +496,8 @@ const MeterReadingModal = ({ isOpen, onClose, contractId }: MeterReadingModalPro
     });
     setImages([]);
     setRequerenteImages([]);
+    setExistingApuracaoImages([]);
     setErrors({});
-    setLicenseId(null);
     setRequerenteReading(null);
     setRequerenteReadingId(null);
     setPreviousReading(null);
@@ -460,7 +516,10 @@ const MeterReadingModal = ({ isOpen, onClose, contractId }: MeterReadingModalPro
             </div>
             <div>
               <DialogTitle className="text-2xl">
-                Apurar Hidrômetro e Horímetro do Mês de {new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+                {existingApuracaoId 
+                  ? `Editar Apuração - Mês de ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`
+                  : `Apurar Hidrômetro e Horímetro do Mês de ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`
+                }
               </DialogTitle>
               <DialogDescription>
                 Revise os dados declarados pelo requerente e registre as leituras apuradas
@@ -487,6 +546,33 @@ const MeterReadingModal = ({ isOpen, onClose, contractId }: MeterReadingModalPro
                         src={imageUrl}
                         alt={`Leitura requerente ${index + 1}`}
                         className="w-full h-32 object-cover rounded-lg border-2 border-gray-200"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => window.open(imageUrl, '_blank')}
+                        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Imagens da Apuração Existente (somente em modo edição) */}
+            {existingApuracaoId && existingApuracaoImages.length > 0 && (
+              <div className="space-y-4">
+                <Label className="text-sm font-medium">Imagens da Apuração Atual</Label>
+                <div className="grid grid-cols-2 gap-4">
+                  {existingApuracaoImages.map((imageUrl, index) => (
+                    <div key={index} className="relative group">
+                      <img
+                        src={imageUrl}
+                        alt={`Apuração atual ${index + 1}`}
+                        className="w-full h-32 object-cover rounded-lg border-2 border-emerald-200"
                       />
                       <Button
                         type="button"
