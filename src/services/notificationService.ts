@@ -161,3 +161,39 @@ export const getNotificationsWithContract = async (userId: string): Promise<Noti
   }
 };
 
+/**
+ * Cria notificação para o requerente
+ * @param requerenteUserId auth_user_id do requerente
+ * @param licenseId ID da licença
+ * @param titulo Título da notificação
+ * @param mensagem Mensagem da notificação
+ */
+export const createNotificationForRequerente = async (
+  requerenteUserId: string,
+  licenseId: string,
+  titulo: string,
+  mensagem: string
+): Promise<void> => {
+  try {
+    const { error } = await supabase
+      .from('notificacoes')
+      .insert({
+        usuario_id: requerenteUserId,
+        licenca_id: licenseId,
+        tipo: 'nova_edicao_solicitada',
+        titulo,
+        mensagem,
+        lida: false,
+        data_envio: new Date().toISOString(),
+      });
+
+    if (error) {
+      console.error('Error creating notification for requerente:', error);
+      throw error;
+    }
+  } catch (error) {
+    console.error('Error in createNotificationForRequerente:', error);
+    throw error;
+  }
+};
+

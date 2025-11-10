@@ -59,6 +59,16 @@ import { useToast } from '@/hooks/use-toast';
 import { getContractById, mapContractDataToFormValues, type ContractFormValues } from '@/services/contractService';
 import { getLicenseById } from '@/services/licenseService';
 import { maskCPF, maskPhone, maskCurrency, maskCEP } from '@/utils/masks';
+import { checkRequerenteReading } from '@/services/monitoringService';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 // Import modals (to be created)
 import PhysicalChemicalAnalysisModal from '@/components/modals/PhysicalChemicalAnalysisModal';
@@ -84,6 +94,7 @@ const ViewContract = () => {
   const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
   const [isNDNEModalOpen, setIsNDNEModalOpen] = useState(false);
   const [isMeterModalOpen, setIsMeterModalOpen] = useState(false);
+  const [showNoReadingDialog, setShowNoReadingDialog] = useState(false);
 
   // Fetch contract data
   useEffect(() => {
@@ -895,7 +906,33 @@ const ViewContract = () => {
                       </Button>
 
                       <Button
-                        onClick={() => setIsMeterModalOpen(true)}
+                        onClick={async () => {
+                          if (!licenseData?.id) {
+                            toast({
+                              title: 'Erro',
+                              description: 'Não foi possível identificar a licença.',
+                              variant: 'destructive',
+                            });
+                            return;
+                          }
+
+                          // Verificar se existe leitura do requerente
+                          try {
+                            const requerenteReading = await checkRequerenteReading(licenseData.id);
+                            if (!requerenteReading) {
+                              setShowNoReadingDialog(true);
+                              return;
+                            }
+                            setIsMeterModalOpen(true);
+                          } catch (error) {
+                            console.error('Error checking requerente reading:', error);
+                            toast({
+                              title: 'Erro',
+                              description: 'Não foi possível verificar a leitura do requerente.',
+                              variant: 'destructive',
+                            });
+                          }
+                        }}
                         className="h-14 justify-start gap-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white hover:from-purple-700 hover:to-purple-800"
                       >
                         <Gauge className="h-5 w-5" />
@@ -943,6 +980,24 @@ const ViewContract = () => {
         onClose={() => setIsMeterModalOpen(false)}
         contractId={contractId || ''}
       />
+
+      {/* Alert Dialog para leitura não disponível */}
+      <AlertDialog open={showNoReadingDialog} onOpenChange={setShowNoReadingDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Leitura Mensal Não Disponível</AlertDialogTitle>
+            <AlertDialogDescription>
+              A leitura mensal do hidrômetro e horímetro do requerente ainda não foi realizada para este mês.
+              É necessário que o requerente faça a leitura antes que o corpo técnico possa realizar a apuração.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setShowNoReadingDialog(false)}>
+              Entendi
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </SidebarProvider>
   );
 };
