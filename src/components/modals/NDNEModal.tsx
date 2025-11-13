@@ -31,15 +31,22 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Droplets, ChevronsUpDown, Check } from 'lucide-react';
+import { Droplets, ChevronsUpDown, Check, Bot } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
+import { NDNERecord } from '@/services/ndneService';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 interface NDNEModalProps {
   isOpen: boolean;
   onClose: () => void;
   contractId: string;
+  editMode?: boolean;
+  existingRecord?: NDNERecord;
+  onSaveSuccess?: () => void;
 }
 
 interface Tecnico {
@@ -47,7 +54,14 @@ interface Tecnico {
   nome: string;
 }
 
-const NDNEModal = ({ isOpen, onClose, contractId }: NDNEModalProps) => {
+const NDNEModal = ({
+  isOpen,
+  onClose,
+  contractId,
+  editMode = false,
+  existingRecord,
+  onSaveSuccess,
+}: NDNEModalProps) => {
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -55,6 +69,7 @@ const NDNEModal = ({ isOpen, onClose, contractId }: NDNEModalProps) => {
     tecnicoId: '',
     nd: '',
     ne: '',
+    dataMedicao: new Date().toISOString().split('T')[0], // Data atual como padrão
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -62,12 +77,31 @@ const NDNEModal = ({ isOpen, onClose, contractId }: NDNEModalProps) => {
   const [loadingTecnicos, setLoadingTecnicos] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [openTecnicoCombobox, setOpenTecnicoCombobox] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(editMode);
+  const [existingRecordId, setExistingRecordId] = useState<string | null>(
+    existingRecord?.id || null
+  );
 
   // Autosave hook
   const autosaveKey = useMemo(() => `ndne_draft_${contractId}`, [contractId]);
   const { restoreDraft, clearDraft } = useFormAutosave(autosaveKey, formData, {
     enabled: isOpen,
   });
+
+  // Carregar dados do registro existente ao abrir em modo edição
+  useEffect(() => {
+    if (isOpen && editMode && existingRecord) {
+      setFormData({
+        periodo: existingRecord.periodo,
+        tecnicoId: existingRecord.tecnico_id || '',
+        nd: existingRecord.nivel_dinamico.toString(),
+        ne: existingRecord.nivel_estatico.toString(),
+        dataMedicao: existingRecord.data_medicao,
+      });
+      setIsEditMode(true);
+      setExistingRecordId(existingRecord.id);
+    }
+  }, [isOpen, editMode, existingRecord]);
 
   // Buscar técnicos aprovados e restaurar rascunho ao abrir o modal
   useEffect(() => {
@@ -86,14 +120,16 @@ const NDNEModal = ({ isOpen, onClose, contractId }: NDNEModalProps) => {
         if (error) throw error;
         setTecnicos(data || []);
 
-        // Tentar restaurar rascunho
-        const draft = restoreDraft();
-        if (draft) {
-          setFormData(draft);
-          toast({
-            title: 'Rascunho restaurado',
-            description: 'Os dados do formulário foram recuperados.',
-          });
+        // Apenas restaurar rascunho se NÃO estiver em modo edição
+        if (!editMode) {
+          const draft = restoreDraft();
+          if (draft) {
+            setFormData(draft);
+            toast({
+              title: 'Rascunho restaurado',
+              description: 'Os dados do formulário foram recuperados.',
+            });
+          }
         }
       } catch (error) {
         console.error('Erro ao buscar técnicos:', error);
@@ -108,7 +144,7 @@ const NDNEModal = ({ isOpen, onClose, contractId }: NDNEModalProps) => {
     };
 
     fetchTecnicos();
-  }, [isOpen, toast, restoreDraft]);
+  }, [isOpen, toast, restoreDraft, editMode]);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -122,25 +158,46 @@ const NDNEModal = ({ isOpen, onClose, contractId }: NDNEModalProps) => {
     }
   };
 
+  // Função para validar se a data corresponde ao período (CA05)
+  const validateDataPeriodo = (periodo: string, dataMedicao: string): boolean => {
+    const data = new Date(dataMedicao);
+    const mes = data.getMonth() + 1; // getMonth() retorna 0-11
+    
+    if (periodo === 'chuvoso') {
+      // Chuvoso: outubro a março (meses 10, 11, 12, 1, 2, 3)
+      return mes >= 10 || mes <= 3;
+    } else if (periodo === 'seco') {
+      // Seco: abril a setembro (meses 4, 5, 6, 7, 8, 9)
+      return mes >= 4 && mes <= 9;
+    }
+    
+    return false;
+  };
+
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
 
+    // CA02 - Validação de campos obrigatórios
     if (!formData.periodo) {
-      newErrors.periodo = 'Selecione o período';
+      newErrors.periodo = 'Campo obrigatório não informado.';
     }
 
     if (!formData.tecnicoId) {
-      newErrors.tecnicoId = 'Selecione o técnico responsável';
+      newErrors.tecnicoId = 'Campo obrigatório não informado.';
+    }
+
+    if (!formData.dataMedicao) {
+      newErrors.dataMedicao = 'Campo obrigatório não informado.';
     }
 
     if (!formData.ne) {
-      newErrors.ne = 'NE é obrigatório';
+      newErrors.ne = 'Campo obrigatório não informado.';
     } else if (isNaN(Number(formData.ne)) || Number(formData.ne) < 0) {
       newErrors.ne = 'Deve ser um número positivo';
     }
 
     if (!formData.nd) {
-      newErrors.nd = 'ND é obrigatório';
+      newErrors.nd = 'Campo obrigatório não informado.';
     } else if (isNaN(Number(formData.nd)) || Number(formData.nd) < 0) {
       newErrors.nd = 'Deve ser um número positivo';
     }
@@ -150,6 +207,13 @@ const NDNEModal = ({ isOpen, onClose, contractId }: NDNEModalProps) => {
     const nd = Number(formData.nd);
     if (!isNaN(ne) && !isNaN(nd) && nd < ne) {
       newErrors.nd = 'ND deve ser maior ou igual a NE';
+    }
+
+    // CA05 - Validação de período vs data de medição
+    if (formData.periodo && formData.dataMedicao) {
+      if (!validateDataPeriodo(formData.periodo, formData.dataMedicao)) {
+        newErrors.dataMedicao = 'Não é permitido alterar o cadastro, pois a data informada não corresponde ao período de medição.';
+      }
     }
 
     setErrors(newErrors);
@@ -179,26 +243,88 @@ const NDNEModal = ({ isOpen, onClose, contractId }: NDNEModalProps) => {
         data: { user },
       } = await supabase.auth.getUser();
 
-      const { error } = await (supabase as any)
-        .from('contrato_nd_ne')
-        .insert({
-          contrato_id: contractId,
-          periodo: formData.periodo,
+      if (isEditMode && existingRecordId) {
+        // Modo de edição - atualizar registro existente
+
+        // Buscar origem original do registro
+        const { data: originalRecord } = await supabase
+          .from('contrato_nd_ne')
+          .select('origem_cadastro, original_origem_cadastro')
+          .eq('id', existingRecordId)
+          .single();
+
+        const updateData = {
+          periodo: formData.periodo as 'chuvoso' | 'seco',
           nivel_estatico: Number(formData.ne),
           nivel_dinamico: Number(formData.nd),
           responsavel: tecnicoSelecionado?.nome || '',
-          data_medicao: new Date().toISOString().split('T')[0],
-          created_by: user?.id,
+          tecnico_id: formData.tecnicoId,
+          data_medicao: formData.dataMedicao,
+          origem_cadastro: 'sistema' as 'chatbot' | 'sistema',
+          // Preservar origem original se já existir, senão usar origem atual
+          original_origem_cadastro: originalRecord?.original_origem_cadastro || originalRecord?.origem_cadastro,
+          edited_at: new Date().toISOString(),
+          edited_by: user?.id,
+        };
+
+        const { error } = await supabase
+          .from('contrato_nd_ne')
+          .update(updateData)
+          .eq('id', existingRecordId);
+
+        if (error) throw error;
+
+        toast({
+          title: 'Registro atualizado com sucesso!',
+          description: `ND: ${formData.nd}m | NE: ${formData.ne}m | Período: ${formData.periodo === 'seco' ? 'Seco' : 'Chuvoso'}`,
         });
+      } else {
+        // Modo de cadastro - inserir novo registro
+        // CA02 - Verificar se já existe registro cadastrado via chatbot para este período
+        const { data: existingChatbotRecord } = await supabase
+          .from('contrato_nd_ne')
+          .select('id')
+          .eq('contrato_id', contractId)
+          .eq('periodo', formData.periodo as 'chuvoso' | 'seco')
+          .eq('origem_cadastro', 'chatbot')
+          .maybeSingle();
 
-      if (error) throw error;
+        if (existingChatbotRecord) {
+          toast({
+            title: 'Registro já existe',
+            description: 'Já existe um cadastro via chatbot para este período. Use o botão "Editar" na lista de registros para atualizá-lo.',
+            variant: 'destructive',
+          });
+          setIsSubmitting(false);
+          return;
+        }
 
-      toast({
-        title: 'Níveis registrados com sucesso!',
-        description: `ND: ${formData.nd}m | NE: ${formData.ne}m | Período: ${formData.periodo === 'seca' ? 'Seca' : 'Chuva'}`,
-      });
+        const insertData = {
+          contrato_id: contractId,
+          periodo: formData.periodo as 'chuvoso' | 'seco',
+          nivel_estatico: Number(formData.ne),
+          nivel_dinamico: Number(formData.nd),
+          responsavel: tecnicoSelecionado?.nome || '',
+          tecnico_id: formData.tecnicoId,
+          data_medicao: formData.dataMedicao,
+          origem_cadastro: 'sistema' as 'chatbot' | 'sistema',
+          created_by: user?.id,
+        };
+
+        const { error } = await supabase
+          .from('contrato_nd_ne')
+          .insert(insertData);
+
+        if (error) throw error;
+
+        toast({
+          title: 'Níveis registrados com sucesso!',
+          description: `ND: ${formData.nd}m | NE: ${formData.ne}m | Período: ${formData.periodo === 'seco' ? 'Seco' : 'Chuvoso'}`,
+        });
+      }
 
       clearDraft();
+      if (onSaveSuccess) onSaveSuccess();
       handleClose();
     } catch (error: any) {
       console.error('Erro ao salvar ND/NE:', error);
@@ -218,8 +344,11 @@ const NDNEModal = ({ isOpen, onClose, contractId }: NDNEModalProps) => {
       tecnicoId: '',
       nd: '',
       ne: '',
+      dataMedicao: new Date().toISOString().split('T')[0],
     });
     setErrors({});
+    setIsEditMode(false);
+    setExistingRecordId(null);
     onClose();
   };
 
@@ -232,13 +361,41 @@ const NDNEModal = ({ isOpen, onClose, contractId }: NDNEModalProps) => {
               <Droplets className="h-5 w-5 text-emerald-600" />
             </div>
             <div>
-              <DialogTitle className="text-xl">Informar Nd(m) e Ne(m)</DialogTitle>
+              <DialogTitle className="text-xl">
+                {isEditMode ? 'Editar Nd(m) e Ne(m)' : 'Informar Nd(m) e Ne(m)'}
+              </DialogTitle>
               <DialogDescription>
-                Registre os níveis dinâmico e estático para o período selecionado
+                {isEditMode
+                  ? 'Edite os níveis dinâmico e estático cadastrados anteriormente'
+                  : 'Registre os níveis dinâmico e estático para o período selecionado'
+                }
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
+
+        {/* Indicadores visuais para modo edição */}
+        {isEditMode && existingRecord && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Badge className="bg-blue-600 text-white">MODO EDIÇÃO</Badge>
+              {existingRecord.original_origem_cadastro === 'chatbot' && (
+                <Badge variant="outline" className="flex items-center gap-1">
+                  <Bot className="h-3 w-3" />
+                  Originalmente criado via Chatbot
+                </Badge>
+              )}
+            </div>
+            <p className="text-sm text-blue-700">
+              Criado em: {format(new Date(existingRecord.created_at || ''), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
+              {existingRecord.edited_at && (
+                <span className="ml-2">
+                  • Última edição: {format(new Date(existingRecord.edited_at), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
+                </span>
+              )}
+            </p>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-6 mt-4">
           {/* Linha 1: Período e Técnico */}
@@ -258,8 +415,8 @@ const NDNEModal = ({ isOpen, onClose, contractId }: NDNEModalProps) => {
                   <SelectValue placeholder="Selecione" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="seca">Seca</SelectItem>
-                  <SelectItem value="chuva">Chuva</SelectItem>
+                  <SelectItem value="seco">Seco</SelectItem>
+                  <SelectItem value="chuvoso">Chuvoso</SelectItem>
                 </SelectContent>
               </Select>
               {errors.periodo && (
@@ -370,6 +527,24 @@ const NDNEModal = ({ isOpen, onClose, contractId }: NDNEModalProps) => {
             </div>
           </div>
 
+          {/* Linha 3: Data de Medição */}
+          <div className="grid grid-cols-1 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="dataMedicao" className="text-sm font-medium">
+                Data de Medição *
+              </Label>
+              <Input
+                id="dataMedicao"
+                type="date"
+                value={formData.dataMedicao}
+                onChange={(e) => handleInputChange('dataMedicao', e.target.value)}
+                className={`h-11 ${errors.dataMedicao ? 'border-red-500' : ''}`}
+                required
+              />
+              {errors.dataMedicao && <p className="text-xs text-red-500">{errors.dataMedicao}</p>}
+            </div>
+          </div>
+
           {/* Botões de Ação */}
           <DialogFooter className="gap-2">
             <Button type="button" variant="outline" onClick={handleClose}>
@@ -380,7 +555,7 @@ const NDNEModal = ({ isOpen, onClose, contractId }: NDNEModalProps) => {
               disabled={isSubmitting}
               className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700"
             >
-              {isSubmitting ? 'Salvando...' : 'Salvar'}
+              {isSubmitting ? 'Salvando...' : isEditMode ? 'Atualizar' : 'Salvar'}
             </Button>
           </DialogFooter>
         </form>

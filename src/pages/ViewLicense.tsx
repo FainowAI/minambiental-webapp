@@ -15,7 +15,6 @@ import {
   Eye,
   Pencil,
   FileBarChart,
-  Beaker,
   Droplets,
   Gauge,
 } from 'lucide-react';
@@ -72,11 +71,23 @@ import { getLicenseById } from '@/services/licenseService';
 import { getContractsByLicenseId } from '@/services/contractService';
 import { useToast } from '@/hooks/use-toast';
 import { generateMonitoringReport } from '@/services/reportService';
+import { checkRequerenteReading, checkCorpoTecnicoApuracao, getMonitoringHistory, type MonthlyReading } from '@/services/monitoringService';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 // Modals
-import PhysicalChemicalAnalysisModal from '@/components/modals/PhysicalChemicalAnalysisModal';
 import NDNEModal from '@/components/modals/NDNEModal';
 import MeterReadingModal from '@/components/modals/MeterReadingModal';
+import MonitoringHistoryChart from '@/components/MonitoringHistoryChart';
+import { NDNEList } from '@/components/ndne/NDNEList';
+import { NDNERecord } from '@/services/ndneService';
 
 interface LicenseData {
   id: string;
@@ -112,10 +123,16 @@ const ViewLicense = () => {
   const [licenseData, setLicenseData] = useState<LicenseData | null>(null);
 
   // Modal states
-  const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
   const [isNDNEModalOpen, setIsNDNEModalOpen] = useState(false);
   const [isMeterModalOpen, setIsMeterModalOpen] = useState(false);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [showNoReadingDialog, setShowNoReadingDialog] = useState(false);
+  const [existingApuracaoId, setExistingApuracaoId] = useState<string | null>(null);
+  const [hasExistingApuracao, setHasExistingApuracao] = useState(false);
+  const [historyData, setHistoryData] = useState<MonthlyReading[] | null>(null);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [editingNDNERecord, setEditingNDNERecord] = useState<NDNERecord | null>(null);
+  const [ndneListKey, setNdneListKey] = useState(0);
 
   // Navigation items for the sidebar
   const navItems = [
@@ -196,6 +213,38 @@ const ViewLicense = () => {
 
     loadLicense();
   }, [id, navigate, toast]);
+
+  // Função para carregar histórico de monitoramento
+  const loadHistory = async () => {
+    if (!id) return;
+
+    try {
+      setIsLoadingHistory(true);
+      const activeContract = getActiveContract();
+
+      // Se houver contrato ativo, buscar dados combinados (mensal + semestral)
+      if (activeContract) {
+        const { getMonitoringHistoryWithNDNE } = await import('@/services/monitoringService');
+        const history = await getMonitoringHistoryWithNDNE(id, activeContract.id);
+        setHistoryData(history);
+      } else {
+        // Sem contrato ativo, buscar apenas dados mensais
+        const history = await getMonitoringHistory(id);
+        setHistoryData(history);
+      }
+    } catch (error) {
+      console.error('Error loading monitoring history:', error);
+      // Não exibir toast de erro, apenas não mostrar o gráfico
+      setHistoryData(null);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
+
+  // Load monitoring history
+  useEffect(() => {
+    loadHistory();
+  }, [id, contracts]);
 
   const handleLogout = () => {
     console.log('Logout clicked');
@@ -935,17 +984,6 @@ const ViewLicense = () => {
                         </Button>
 
                         <Button
-                          onClick={() => setIsAnalysisModalOpen(true)}
-                          className="h-12 justify-start gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700"
-                        >
-                          <Beaker className="h-5 w-5 flex-shrink-0" />
-                          <div className="text-left">
-                            <div className="font-semibold text-sm">Análise Físico-Química</div>
-                            <div className="text-xs opacity-90">Registrar análise</div>
-                          </div>
-                        </Button>
-
-                        <Button
                           onClick={() => setIsNDNEModalOpen(true)}
                           className="h-12 justify-start gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700"
                         >
@@ -957,12 +995,51 @@ const ViewLicense = () => {
                         </Button>
 
                         <Button
-                          onClick={() => setIsMeterModalOpen(true)}
+                          onClick={async () => {
+                            if (!id) {
+                              toast({
+                                title: 'Erro',
+                                description: 'Não foi possível identificar a licença.',
+                                variant: 'destructive',
+                              });
+                              return;
+                            }
+
+                            // Verificar se existe leitura do requerente
+                            try {
+                              const requerenteReading = await checkRequerenteReading(id);
+                              if (!requerenteReading) {
+                                setShowNoReadingDialog(true);
+                                return;
+                              }
+
+                              // Verificar se existe apuração do corpo técnico
+                              const corpoTecnicoApuracao = await checkCorpoTecnicoApuracao(id);
+                              if (corpoTecnicoApuracao) {
+                                setExistingApuracaoId(corpoTecnicoApuracao.id);
+                                setHasExistingApuracao(true);
+                              } else {
+                                setExistingApuracaoId(null);
+                                setHasExistingApuracao(false);
+                              }
+
+                              setIsMeterModalOpen(true);
+                            } catch (error) {
+                              console.error('Error checking requerente reading:', error);
+                              toast({
+                                title: 'Erro',
+                                description: 'Não foi possível verificar a leitura do requerente.',
+                                variant: 'destructive',
+                              });
+                            }
+                          }}
                           className="h-12 justify-start gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700"
                         >
                           <Gauge className="h-5 w-5 flex-shrink-0" />
                           <div className="text-left">
-                            <div className="font-semibold text-sm">Hidrômetro/Horímetro</div>
+                            <div className="font-semibold text-sm">
+                              {hasExistingApuracao ? 'Editar Hidrômetro/Horímetro' : 'Hidrômetro/Horímetro'}
+                            </div>
                             <div className="text-xs opacity-90">Leituras mensais</div>
                           </div>
                         </Button>
@@ -979,6 +1056,23 @@ const ViewLicense = () => {
                       </div>
                     )}
                   </div>
+
+                  {/* Seção de ND e NE */}
+                  {getActiveContract() && (
+                    <>
+                      <Separator className="my-8" />
+                      <div>
+                        <NDNEList
+                          key={ndneListKey}
+                          contractId={getActiveContract()?.id || ''}
+                          onEdit={(record) => {
+                            setEditingNDNERecord(record);
+                            setIsNDNEModalOpen(true);
+                          }}
+                        />
+                      </div>
+                    </>
+                  )}
 
                   {/* Contratos Vinculados Section */}
                   <Separator className="my-8" />
@@ -1092,6 +1186,30 @@ const ViewLicense = () => {
                     )}
                   </div>
 
+                  {/* Histórico de Monitoramento Section */}
+                  <Separator className="my-8" />
+
+                  <div>
+                    {isLoadingHistory ? (
+                      <div className="space-y-3">
+                        <Skeleton className="h-12 w-full" />
+                        <Skeleton className="h-[400px] w-full" />
+                      </div>
+                    ) : historyData && historyData.length > 0 ? (
+                      <MonitoringHistoryChart data={historyData} />
+                    ) : (
+                      <div className="rounded-lg border border-gray-200 bg-gray-50 p-8 text-center">
+                        <FileBarChart className="mx-auto h-12 w-12 text-gray-400 mb-3" />
+                        <p className="text-gray-600 font-medium mb-1">
+                          O monitoramento da outorga ainda não foi iniciado
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          O histórico será exibido após a primeira apuração.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
                   {/* Action Buttons */}
                   <div className="flex justify-end gap-3 border-t border-gray-200 pt-6 mt-8">
                     <Button
@@ -1121,25 +1239,47 @@ const ViewLicense = () => {
       {/* Modals */}
       {getActiveContract() && (
         <>
-          <PhysicalChemicalAnalysisModal
-            isOpen={isAnalysisModalOpen}
-            onClose={() => setIsAnalysisModalOpen(false)}
-            contractId={getActiveContract()?.id || ''}
-          />
-
           <NDNEModal
             isOpen={isNDNEModalOpen}
-            onClose={() => setIsNDNEModalOpen(false)}
+            onClose={() => {
+              setIsNDNEModalOpen(false);
+              setEditingNDNERecord(null);
+            }}
             contractId={getActiveContract()?.id || ''}
+            editMode={!!editingNDNERecord}
+            existingRecord={editingNDNERecord || undefined}
+            onSaveSuccess={() => {
+              setNdneListKey((prev) => prev + 1);
+              loadHistory(); // Recarregar gráfico após salvar ND/NE
+            }}
           />
 
           <MeterReadingModal
             isOpen={isMeterModalOpen}
             onClose={() => setIsMeterModalOpen(false)}
-            contractId={getActiveContract()?.id || ''}
+            licenseId={id || ''}
+            existingApuracaoId={existingApuracaoId}
           />
         </>
       )}
+
+      {/* Alert Dialog para leitura não disponível */}
+      <AlertDialog open={showNoReadingDialog} onOpenChange={setShowNoReadingDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Leitura Mensal Não Disponível</AlertDialogTitle>
+            <AlertDialogDescription>
+              A leitura mensal do hidrômetro e horímetro do requerente ainda não foi realizada para este mês.
+              É necessário que o requerente faça a leitura antes que o corpo técnico possa realizar a apuração.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setShowNoReadingDialog(false)}>
+              Entendi
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </SidebarProvider>
   );
 };
