@@ -217,26 +217,37 @@ const ViewLicense = () => {
     loadLicense();
   }, [id, navigate, toast]);
 
-  // Load monitoring history
-  useEffect(() => {
-    const loadHistory = async () => {
-      if (!id) return;
+  // Função para carregar histórico de monitoramento
+  const loadHistory = async () => {
+    if (!id) return;
 
-      try {
-        setIsLoadingHistory(true);
+    try {
+      setIsLoadingHistory(true);
+      const activeContract = getActiveContract();
+
+      // Se houver contrato ativo, buscar dados combinados (mensal + semestral)
+      if (activeContract) {
+        const { getMonitoringHistoryWithNDNE } = await import('@/services/monitoringService');
+        const history = await getMonitoringHistoryWithNDNE(id, activeContract.id);
+        setHistoryData(history);
+      } else {
+        // Sem contrato ativo, buscar apenas dados mensais
         const history = await getMonitoringHistory(id);
         setHistoryData(history);
-      } catch (error) {
-        console.error('Error loading monitoring history:', error);
-        // Não exibir toast de erro, apenas não mostrar o gráfico
-        setHistoryData(null);
-      } finally {
-        setIsLoadingHistory(false);
       }
-    };
+    } catch (error) {
+      console.error('Error loading monitoring history:', error);
+      // Não exibir toast de erro, apenas não mostrar o gráfico
+      setHistoryData(null);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
 
+  // Load monitoring history
+  useEffect(() => {
     loadHistory();
-  }, [id]);
+  }, [id, contracts]);
 
   const handleLogout = () => {
     console.log('Logout clicked');
@@ -1259,6 +1270,7 @@ const ViewLicense = () => {
             existingRecord={editingNDNERecord || undefined}
             onSaveSuccess={() => {
               setNdneListKey((prev) => prev + 1);
+              loadHistory(); // Recarregar gráfico após salvar ND/NE
             }}
           />
 

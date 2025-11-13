@@ -183,10 +183,25 @@ export const checkCorpoTecnicoApuracao = async (
 
 export interface MonthlyReading {
   mes: string;
+  ano?: number;
   hidrometro: number | null;
   horimetro: number | null;
   nd: number | null;
   ne: number | null;
+  ndneData?: {
+    periodo: 'chuvoso' | 'seco';
+    tecnico: string | null;
+    dataMedicao: string;
+    origem: 'chatbot' | 'sistema';
+  };
+  hidrometroData?: {
+    tecnico: string | null;
+    dataLeitura: string;
+  };
+  horimetroData?: {
+    tecnico: string | null;
+    dataLeitura: string;
+  };
 }
 
 /**
@@ -263,6 +278,7 @@ export const getMonitoringHistory = async (
 
       return {
         mes: monthInfo.mesNome,
+        ano: monthInfo.ano,
         hidrometro: monitoramento?.hidrometro_leitura_atual || null,
         horimetro: monitoramento?.horimetro_leitura_atual || null,
         nd: monitoramento?.nd_metros || null,
@@ -273,6 +289,82 @@ export const getMonitoringHistory = async (
     return result;
   } catch (error) {
     console.error('Error in getMonitoringHistory:', error);
+    throw error;
+  }
+};
+
+/**
+ * Busca histórico de monitoramentos combinando dados mensais (Hidrômetro/Horímetro)
+ * com dados semestrais (ND/NE) do contrato
+ * @param licenseId ID da licença
+ * @param contractId ID do contrato
+ * @returns Array com dados combinados dos últimos 12 meses ou null
+ */
+export const getMonitoringHistoryWithNDNE = async (
+  licenseId: string,
+  contractId: string
+): Promise<MonthlyReading[] | null> => {
+  try {
+    // Importar serviço de ND/NE
+    const { fetchNDNERecords } = await import('./ndneService');
+
+    // 1. Buscar dados mensais de hidrômetro/horímetro
+    const monthlyData = await getMonitoringHistory(licenseId);
+
+    if (!monthlyData) {
+      return null;
+    }
+
+    // 2. Buscar registros de ND/NE do contrato
+    const ndneRecords = await fetchNDNERecords(contractId);
+
+    if (!ndneRecords || ndneRecords.length === 0) {
+      // Se não houver dados de ND/NE, retornar apenas dados mensais
+      return monthlyData;
+    }
+
+    // 3. Mapear ND/NE para os meses correspondentes
+    const monthNames = [
+      'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+      'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+    ];
+
+    const result: MonthlyReading[] = monthlyData.map((monthData) => {
+      // Extrair índice do mês (0-11) do nome do mês
+      const mesIndex = monthNames.indexOf(monthData.mes);
+
+      // Buscar registro ND/NE para este mês específico
+      const ndneRecord = ndneRecords.find((record) => {
+        const recordDate = new Date(record.data_medicao);
+        const recordMonth = recordDate.getMonth(); // 0-11
+        const recordYear = recordDate.getFullYear();
+
+        // Verificar se o mês e ano correspondem
+        return recordMonth === mesIndex && recordYear === monthData.ano;
+      });
+
+      // Se encontrou registro de ND/NE para este mês, adicionar os dados
+      if (ndneRecord) {
+        return {
+          ...monthData,
+          nd: ndneRecord.nivel_dinamico,
+          ne: ndneRecord.nivel_estatico,
+          ndneData: {
+            periodo: ndneRecord.periodo,
+            tecnico: ndneRecord.tecnico?.nome || ndneRecord.responsavel || null,
+            dataMedicao: ndneRecord.data_medicao,
+            origem: ndneRecord.origem_cadastro,
+          },
+        };
+      }
+
+      // Sem dados de ND/NE para este mês, retornar apenas dados mensais
+      return monthData;
+    });
+
+    return result;
+  } catch (error) {
+    console.error('Error in getMonitoringHistoryWithNDNE:', error);
     throw error;
   }
 };
