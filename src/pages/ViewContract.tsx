@@ -10,6 +10,9 @@ import {
   ArrowLeft,
   Edit,
   Loader2,
+  Beaker,
+  Trash2,
+  Eye,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -55,6 +58,19 @@ import { useToast } from '@/hooks/use-toast';
 import { getContractById, mapContractDataToFormValues, type ContractFormValues } from '@/services/contractService';
 import { getLicenseById } from '@/services/licenseService';
 import { maskCPF, maskPhone, maskCurrency, maskCEP } from '@/utils/masks';
+import { getAnalysesByContract, deleteAnalysis, type AnalysisData } from '@/services/analysisService';
+import PhysicalChemicalAnalysisModal from '@/components/modals/PhysicalChemicalAnalysisModal';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface LicenseData {
   id: string;
@@ -70,6 +86,14 @@ const ViewContract = () => {
   const [licenseData, setLicenseData] = useState<LicenseData | null>(null);
   const [isLoadingContract, setIsLoadingContract] = useState(true);
   const [isLoadingLicense, setIsLoadingLicense] = useState(true);
+  
+  // Estados para análises
+  const [analyses, setAnalyses] = useState<AnalysisData[]>([]);
+  const [isLoadingAnalyses, setIsLoadingAnalyses] = useState(false);
+  const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
+  const [selectedAnalysisId, setSelectedAnalysisId] = useState<string | undefined>(undefined);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [analysisToDelete, setAnalysisToDelete] = useState<string | null>(null);
 
   // Fetch contract data
   useEffect(() => {
@@ -128,12 +152,90 @@ const ViewContract = () => {
     fetchLicense();
   }, [licenseId]);
 
+  // Fetch analyses
+  useEffect(() => {
+    const fetchAnalyses = async () => {
+      if (!contractId) return;
+
+      setIsLoadingAnalyses(true);
+      try {
+        const data = await getAnalysesByContract(contractId);
+        setAnalyses(data);
+      } catch (error) {
+        console.error('Erro ao buscar análises:', error);
+        toast({
+          title: 'Erro ao carregar análises',
+          description: 'Não foi possível carregar as análises do contrato.',
+          variant: 'destructive',
+        });
+      } finally {
+        setIsLoadingAnalyses(false);
+      }
+    };
+
+    fetchAnalyses();
+  }, [contractId, toast]);
+
   const handleSignOut = () => {
     navigate('/');
   };
 
   const handleEditContract = () => {
     navigate(`/edit-contract/${licenseId}/${contractId}`);
+  };
+
+  const handleOpenAnalysisModal = (analysisId?: string) => {
+    setSelectedAnalysisId(analysisId);
+    setIsAnalysisModalOpen(true);
+  };
+
+  const handleCloseAnalysisModal = () => {
+    setSelectedAnalysisId(undefined);
+    setIsAnalysisModalOpen(false);
+  };
+
+  const handleAnalysisSuccess = async () => {
+    // Recarregar lista de análises
+    if (contractId) {
+      try {
+        const data = await getAnalysesByContract(contractId);
+        setAnalyses(data);
+      } catch (error) {
+        console.error('Erro ao recarregar análises:', error);
+      }
+    }
+  };
+
+  const handleDeleteAnalysis = (analysisId: string) => {
+    setAnalysisToDelete(analysisId);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDeleteAnalysis = async () => {
+    if (!analysisToDelete) return;
+
+    try {
+      await deleteAnalysis(analysisToDelete);
+      toast({
+        title: 'Análise excluída',
+        description: 'A análise foi removida com sucesso.',
+      });
+      // Recarregar lista
+      if (contractId) {
+        const data = await getAnalysesByContract(contractId);
+        setAnalyses(data);
+      }
+    } catch (error) {
+      console.error('Erro ao excluir análise:', error);
+      toast({
+        title: 'Erro ao excluir',
+        description: 'Não foi possível excluir a análise.',
+        variant: 'destructive',
+      });
+    } finally {
+      setDeleteDialogOpen(false);
+      setAnalysisToDelete(null);
+    }
   };
 
   const isLoading = isLoadingContract || isLoadingLicense;
@@ -827,6 +929,100 @@ const ViewContract = () => {
 
                 </div>
 
+                {/* Seção de Análises Físico-Químicas e Bacteriológicas */}
+                <Separator />
+                
+                <div className="space-y-6 p-8">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3 pb-3 border-b border-gray-200 flex-1">
+                      <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-emerald-100 to-teal-100 flex items-center justify-center">
+                        <Beaker className="h-5 w-5 text-emerald-600" />
+                      </div>
+                      <h2 className="text-xl font-semibold text-gray-900">Análises Físico-Químicas e Bacteriológicas</h2>
+                    </div>
+                    <Button
+                      onClick={() => handleOpenAnalysisModal()}
+                      className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700"
+                    >
+                      <Beaker className="h-4 w-4 mr-2" />
+                      Nova Análise
+                    </Button>
+                  </div>
+
+                  {/* Lista de análises */}
+                  {isLoadingAnalyses ? (
+                    <div className="flex items-center justify-center h-32">
+                      <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
+                    </div>
+                  ) : analyses.length === 0 ? (
+                    <Card>
+                      <CardContent className="flex flex-col items-center justify-center py-12">
+                        <Beaker className="h-12 w-12 text-gray-400 mb-4" />
+                        <p className="text-gray-500 text-center">
+                          Nenhuma análise cadastrada ainda.
+                          <br />
+                          Clique em "Nova Análise" para adicionar a primeira.
+                        </p>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {analyses.map((analysis) => (
+                        <Card key={analysis.id} className="hover:shadow-md transition-shadow">
+                          <CardHeader>
+                            <CardTitle className="text-base flex items-center justify-between">
+                              <span>Análise {analysis.codigo_amostra}</span>
+                              <div className="flex gap-1">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => handleOpenAnalysisModal(analysis.id)}
+                                  className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => handleDeleteAnalysis(analysis.id)}
+                                  className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </CardTitle>
+                            <CardDescription>
+                              Coleta: {new Date(analysis.data_coleta).toLocaleDateString('pt-BR')}
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-2 text-sm">
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">Responsável:</span>
+                                <span className="font-medium">{analysis.responsavel_coleta}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">Laboratório:</span>
+                                <span className="font-medium">{analysis.laboratorio}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">Tipo de Coleta:</span>
+                                <span className="font-medium">{analysis.tipo_coleta}</span>
+                              </div>
+                              {analysis.observacoes && (
+                                <div className="pt-2 border-t">
+                                  <span className="text-gray-600">Observações:</span>
+                                  <p className="text-xs text-gray-500 mt-1 line-clamp-2">{analysis.observacoes}</p>
+                                </div>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 {/* Footer with action buttons */}
                 <div className="bg-gray-50 px-8 py-6 border-t border-gray-200 flex justify-between">
                   <Button
@@ -841,6 +1037,39 @@ const ViewContract = () => {
               </div>
             </div>
           </motion.div>
+
+          {/* Modal de Análise */}
+          {contractId && licenseId && (
+            <PhysicalChemicalAnalysisModal
+              isOpen={isAnalysisModalOpen}
+              onClose={handleCloseAnalysisModal}
+              contractId={contractId}
+              licenseId={licenseId}
+              analysisId={selectedAnalysisId}
+              onSuccess={handleAnalysisSuccess}
+            />
+          )}
+
+          {/* Dialog de confirmação de exclusão */}
+          <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Tem certeza que deseja excluir esta análise? Esta ação não pode ser desfeita.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={confirmDeleteAnalysis}
+                  className="bg-red-600 hover:bg-red-700"
+                >
+                  Excluir
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </SidebarInset>
       </div>
     </SidebarProvider>

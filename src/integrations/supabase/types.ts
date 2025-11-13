@@ -17,65 +17,99 @@ export type Database = {
       analises_agua: {
         Row: {
           arquivo_laudo: string | null
+          codigo_amostra: string | null
           coliformes_totais: number | null
           condutividade: number | null
+          contrato_id: string | null
           cor: number | null
           created_at: string | null
           data_coleta: string
+          data_entrada_laboratorio: string | null
           dureza_total: number | null
           escherichia_coli: number | null
+          hora_coleta: string | null
           id: string
+          identificacao_profissional: string | null
           laboratorio: string | null
           licenca_id: string
           observacoes: string | null
           parametros_adicionais: Json | null
           ph: number | null
+          responsavel_coleta: string | null
           solidos_totais: number | null
           status: string | null
+          temperatura_ambiente: number | null
+          temperatura_amostra: number | null
+          tipo_coleta: string | null
           turbidez: number | null
           updated_at: string | null
         }
         Insert: {
           arquivo_laudo?: string | null
+          codigo_amostra?: string | null
           coliformes_totais?: number | null
           condutividade?: number | null
+          contrato_id?: string | null
           cor?: number | null
           created_at?: string | null
           data_coleta: string
+          data_entrada_laboratorio?: string | null
           dureza_total?: number | null
           escherichia_coli?: number | null
+          hora_coleta?: string | null
           id?: string
+          identificacao_profissional?: string | null
           laboratorio?: string | null
           licenca_id: string
           observacoes?: string | null
           parametros_adicionais?: Json | null
           ph?: number | null
+          responsavel_coleta?: string | null
           solidos_totais?: number | null
           status?: string | null
+          temperatura_ambiente?: number | null
+          temperatura_amostra?: number | null
+          tipo_coleta?: string | null
           turbidez?: number | null
           updated_at?: string | null
         }
         Update: {
           arquivo_laudo?: string | null
+          codigo_amostra?: string | null
           coliformes_totais?: number | null
           condutividade?: number | null
+          contrato_id?: string | null
           cor?: number | null
           created_at?: string | null
           data_coleta?: string
+          data_entrada_laboratorio?: string | null
           dureza_total?: number | null
           escherichia_coli?: number | null
+          hora_coleta?: string | null
           id?: string
+          identificacao_profissional?: string | null
           laboratorio?: string | null
           licenca_id?: string
           observacoes?: string | null
           parametros_adicionais?: Json | null
           ph?: number | null
+          responsavel_coleta?: string | null
           solidos_totais?: number | null
           status?: string | null
+          temperatura_ambiente?: number | null
+          temperatura_amostra?: number | null
+          tipo_coleta?: string | null
           turbidez?: number | null
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "analises_agua_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "contratos"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "analises_agua_licenca_id_fkey"
             columns: ["licenca_id"]
@@ -117,14 +151,18 @@ export type Database = {
           nome_tecnico: string | null
           numero: string | null
           numero_obra: string | null
+          observacao: string | null
           pais: string | null
           pais_obra: string | null
           periodo_medicao_fim: string | null
           periodo_medicao_inicio: string | null
           previsao_termino: string | null
+          registro: string | null
+          registro_empresa_contratada: string | null
           rnp: string | null
           rua: string | null
           rua_obra: string | null
+          status: string | null
           telefone_contato: string | null
           tipo_contratante: string | null
           titulo_profissional: string | null
@@ -156,14 +194,18 @@ export type Database = {
           nome_tecnico?: string | null
           numero?: string | null
           numero_obra?: string | null
+          observacao?: string | null
           pais?: string | null
           pais_obra?: string | null
           periodo_medicao_fim?: string | null
           periodo_medicao_inicio?: string | null
           previsao_termino?: string | null
+          registro?: string | null
+          registro_empresa_contratada?: string | null
           rnp?: string | null
           rua?: string | null
           rua_obra?: string | null
+          status?: string | null
           telefone_contato?: string | null
           tipo_contratante?: string | null
           titulo_profissional?: string | null
@@ -195,14 +237,18 @@ export type Database = {
           nome_tecnico?: string | null
           numero?: string | null
           numero_obra?: string | null
+          observacao?: string | null
           pais?: string | null
           pais_obra?: string | null
           periodo_medicao_fim?: string | null
           periodo_medicao_inicio?: string | null
           previsao_termino?: string | null
+          registro?: string | null
+          registro_empresa_contratada?: string | null
           rnp?: string | null
           rua?: string | null
           rua_obra?: string | null
+          status?: string | null
           telefone_contato?: string | null
           tipo_contratante?: string | null
           titulo_profissional?: string | null
@@ -223,82 +269,6 @@ export type Database = {
             columns: ["licenca_id"]
             isOneToOne: false
             referencedRelation: "licencas"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      contrato_nd_ne: {
-        Row: {
-          contrato_id: string
-          created_at: string | null
-          created_by: string | null
-          data_medicao: string
-          edited_at: string | null
-          edited_by: string | null
-          id: string
-          nivel_dinamico: number
-          nivel_estatico: number
-          origem_cadastro: Database["public"]["Enums"]["origem_cadastro_nd_ne"]
-          original_origem_cadastro: Database["public"]["Enums"]["origem_cadastro_nd_ne"] | null
-          periodo: Database["public"]["Enums"]["periodo_medicao"]
-          responsavel: string | null
-          tecnico_id: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          contrato_id: string
-          created_at?: string | null
-          created_by?: string | null
-          data_medicao: string
-          edited_at?: string | null
-          edited_by?: string | null
-          id?: string
-          nivel_dinamico: number
-          nivel_estatico: number
-          origem_cadastro?: Database["public"]["Enums"]["origem_cadastro_nd_ne"]
-          original_origem_cadastro?: Database["public"]["Enums"]["origem_cadastro_nd_ne"] | null
-          periodo: Database["public"]["Enums"]["periodo_medicao"]
-          responsavel?: string | null
-          tecnico_id?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          contrato_id?: string
-          created_at?: string | null
-          created_by?: string | null
-          data_medicao?: string
-          edited_at?: string | null
-          edited_by?: string | null
-          id?: string
-          nivel_dinamico?: number
-          nivel_estatico?: number
-          origem_cadastro?: Database["public"]["Enums"]["origem_cadastro_nd_ne"]
-          original_origem_cadastro?: Database["public"]["Enums"]["origem_cadastro_nd_ne"] | null
-          periodo?: Database["public"]["Enums"]["periodo_medicao"]
-          responsavel?: string | null
-          tecnico_id?: string | null
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "contrato_nd_ne_contrato_id_fkey"
-            columns: ["contrato_id"]
-            isOneToOne: false
-            referencedRelation: "contratos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "contrato_nd_ne_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "contrato_nd_ne_tecnico_id_fkey"
-            columns: ["tecnico_id"]
-            isOneToOne: false
-            referencedRelation: "usuarios"
             referencedColumns: ["id"]
           },
         ]
@@ -775,8 +745,8 @@ export type Database = {
         Args: { invitation_token: string; user_id: string }
         Returns: Json
       }
-      expire_old_invitations: { Args: never; Returns: undefined }
-      generate_invitation_token: { Args: never; Returns: string }
+      expire_old_invitations: { Args: Record<PropertyKey, never>; Returns: undefined }
+      generate_invitation_token: { Args: Record<PropertyKey, never>; Returns: string }
       get_invitation_by_token: { Args: { token: string }; Returns: Json }
       has_role: {
         Args: {
@@ -785,8 +755,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_corpo_tecnico: { Args: { _user_id: string }; Returns: boolean }
+      is_requerente: { Args: { _user_id: string }; Returns: boolean }
       sync_confirmed_users: {
-        Args: never
+        Args: Record<PropertyKey, never>
         Returns: {
           email: string
           status: string
@@ -800,6 +772,7 @@ export type Database = {
       origem_cadastro_nd_ne: "chatbot" | "sistema"
       periodo_medicao: "chuvoso" | "seco"
       prioridade_licenca: "URGENTE" | "ALTA" | "MÉDIA" | "BAIXA"
+      tipo_medidor: "hidrometro" | "horimetro"
       user_profile: "corpo_tecnico" | "tecnico" | "requerente"
     }
     CompositeTypes: {
@@ -933,6 +906,7 @@ export const Constants = {
       origem_cadastro_nd_ne: ["chatbot", "sistema"],
       periodo_medicao: ["chuvoso", "seco"],
       prioridade_licenca: ["URGENTE", "ALTA", "MÉDIA", "BAIXA"],
+      tipo_medidor: ["hidrometro", "horimetro"],
       user_profile: ["corpo_tecnico", "tecnico", "requerente"],
     },
   },

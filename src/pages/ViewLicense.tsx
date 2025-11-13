@@ -15,7 +15,6 @@ import {
   Eye,
   Pencil,
   FileBarChart,
-  Beaker,
   Droplets,
   Gauge,
 } from 'lucide-react';
@@ -84,7 +83,6 @@ import {
 } from '@/components/ui/alert-dialog';
 
 // Modals
-import PhysicalChemicalAnalysisModal from '@/components/modals/PhysicalChemicalAnalysisModal';
 import NDNEModal from '@/components/modals/NDNEModal';
 import MeterReadingModal from '@/components/modals/MeterReadingModal';
 import MonitoringHistoryChart from '@/components/MonitoringHistoryChart';
@@ -125,7 +123,6 @@ const ViewLicense = () => {
   const [licenseData, setLicenseData] = useState<LicenseData | null>(null);
 
   // Modal states
-  const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
   const [isNDNEModalOpen, setIsNDNEModalOpen] = useState(false);
   const [isMeterModalOpen, setIsMeterModalOpen] = useState(false);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
@@ -987,17 +984,6 @@ const ViewLicense = () => {
                         </Button>
 
                         <Button
-                          onClick={() => setIsAnalysisModalOpen(true)}
-                          className="h-12 justify-start gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700"
-                        >
-                          <Beaker className="h-5 w-5 flex-shrink-0" />
-                          <div className="text-left">
-                            <div className="font-semibold text-sm">Análise Físico-Química</div>
-                            <div className="text-xs opacity-90">Registrar análise</div>
-                          </div>
-                        </Button>
-
-                        <Button
                           onClick={() => setIsNDNEModalOpen(true)}
                           className="h-12 justify-start gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700"
                         >
@@ -1253,12 +1239,6 @@ const ViewLicense = () => {
       {/* Modals */}
       {getActiveContract() && (
         <>
-          <PhysicalChemicalAnalysisModal
-            isOpen={isAnalysisModalOpen}
-            onClose={() => setIsAnalysisModalOpen(false)}
-            contractId={getActiveContract()?.id || ''}
-          />
-
           <NDNEModal
             isOpen={isNDNEModalOpen}
             onClose={() => {
