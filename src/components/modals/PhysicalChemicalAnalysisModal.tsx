@@ -189,7 +189,7 @@ const PhysicalChemicalAnalysisModal = ({
         // Modo edição
         await updateAnalysis(analysisId, formData);
         toast({
-          title: 'Análise atualizada com sucesso!',
+          title: 'Análise atualizada com sucesso.',
           description: 'Os dados foram salvos.',
         });
       } else {
