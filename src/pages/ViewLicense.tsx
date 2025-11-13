@@ -88,6 +88,8 @@ import PhysicalChemicalAnalysisModal from '@/components/modals/PhysicalChemicalA
 import NDNEModal from '@/components/modals/NDNEModal';
 import MeterReadingModal from '@/components/modals/MeterReadingModal';
 import MonitoringHistoryChart from '@/components/MonitoringHistoryChart';
+import { NDNEList } from '@/components/ndne/NDNEList';
+import { NDNERecord } from '@/services/ndneService';
 
 interface LicenseData {
   id: string;
@@ -132,6 +134,8 @@ const ViewLicense = () => {
   const [hasExistingApuracao, setHasExistingApuracao] = useState(false);
   const [historyData, setHistoryData] = useState<MonthlyReading[] | null>(null);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [editingNDNERecord, setEditingNDNERecord] = useState<NDNERecord | null>(null);
+  const [ndneListKey, setNdneListKey] = useState(0);
 
   // Navigation items for the sidebar
   const navItems = [
@@ -1056,6 +1060,23 @@ const ViewLicense = () => {
                     )}
                   </div>
 
+                  {/* Seção de ND e NE */}
+                  {getActiveContract() && (
+                    <>
+                      <Separator className="my-8" />
+                      <div>
+                        <NDNEList
+                          key={ndneListKey}
+                          contractId={getActiveContract()?.id || ''}
+                          onEdit={(record) => {
+                            setEditingNDNERecord(record);
+                            setIsNDNEModalOpen(true);
+                          }}
+                        />
+                      </div>
+                    </>
+                  )}
+
                   {/* Contratos Vinculados Section */}
                   <Separator className="my-8" />
 
@@ -1229,8 +1250,16 @@ const ViewLicense = () => {
 
           <NDNEModal
             isOpen={isNDNEModalOpen}
-            onClose={() => setIsNDNEModalOpen(false)}
+            onClose={() => {
+              setIsNDNEModalOpen(false);
+              setEditingNDNERecord(null);
+            }}
             contractId={getActiveContract()?.id || ''}
+            editMode={!!editingNDNERecord}
+            existingRecord={editingNDNERecord || undefined}
+            onSaveSuccess={() => {
+              setNdneListKey((prev) => prev + 1);
+            }}
           />
 
           <MeterReadingModal

@@ -227,6 +227,82 @@ export type Database = {
           },
         ]
       }
+      contrato_nd_ne: {
+        Row: {
+          contrato_id: string
+          created_at: string | null
+          created_by: string | null
+          data_medicao: string
+          edited_at: string | null
+          edited_by: string | null
+          id: string
+          nivel_dinamico: number
+          nivel_estatico: number
+          origem_cadastro: Database["public"]["Enums"]["origem_cadastro_nd_ne"]
+          original_origem_cadastro: Database["public"]["Enums"]["origem_cadastro_nd_ne"] | null
+          periodo: Database["public"]["Enums"]["periodo_medicao"]
+          responsavel: string | null
+          tecnico_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          contrato_id: string
+          created_at?: string | null
+          created_by?: string | null
+          data_medicao: string
+          edited_at?: string | null
+          edited_by?: string | null
+          id?: string
+          nivel_dinamico: number
+          nivel_estatico: number
+          origem_cadastro?: Database["public"]["Enums"]["origem_cadastro_nd_ne"]
+          original_origem_cadastro?: Database["public"]["Enums"]["origem_cadastro_nd_ne"] | null
+          periodo: Database["public"]["Enums"]["periodo_medicao"]
+          responsavel?: string | null
+          tecnico_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          contrato_id?: string
+          created_at?: string | null
+          created_by?: string | null
+          data_medicao?: string
+          edited_at?: string | null
+          edited_by?: string | null
+          id?: string
+          nivel_dinamico?: number
+          nivel_estatico?: number
+          origem_cadastro?: Database["public"]["Enums"]["origem_cadastro_nd_ne"]
+          original_origem_cadastro?: Database["public"]["Enums"]["origem_cadastro_nd_ne"] | null
+          periodo?: Database["public"]["Enums"]["periodo_medicao"]
+          responsavel?: string | null
+          tecnico_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contrato_nd_ne_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "contratos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contrato_nd_ne_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contrato_nd_ne_tecnico_id_fkey"
+            columns: ["tecnico_id"]
+            isOneToOne: false
+            referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       licencas: {
         Row: {
           created_at: string | null
@@ -721,6 +797,8 @@ export type Database = {
     Enums: {
       app_role: "admin" | "user" | "gestor"
       invitation_status: "pending" | "accepted" | "expired"
+      origem_cadastro_nd_ne: "chatbot" | "sistema"
+      periodo_medicao: "chuvoso" | "seco"
       prioridade_licenca: "URGENTE" | "ALTA" | "MÉDIA" | "BAIXA"
       user_profile: "corpo_tecnico" | "tecnico" | "requerente"
     }
@@ -852,6 +930,8 @@ export const Constants = {
     Enums: {
       app_role: ["admin", "user", "gestor"],
       invitation_status: ["pending", "accepted", "expired"],
+      origem_cadastro_nd_ne: ["chatbot", "sistema"],
+      periodo_medicao: ["chuvoso", "seco"],
       prioridade_licenca: ["URGENTE", "ALTA", "MÉDIA", "BAIXA"],
       user_profile: ["corpo_tecnico", "tecnico", "requerente"],
     },
