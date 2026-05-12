@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import type { Tables } from '@/integrations/supabase/types';
 
 // TODO Sprint 0b: vai virar enum no banco
 export type TipoNotificacao =
@@ -9,200 +10,158 @@ export type TipoNotificacao =
   | 'nova_edicao_solicitada'
   | 'apuracao_disponivel';
 
-export interface Notification {
-  id: string;
-  usuario_id: string;
-  licenca_id: string | null;
-  tipo: string;
-  titulo: string;
-  mensagem: string;
-  lida: boolean | null;
-  data_envio: string | null;
-  created_at: string | null;
-}
+export type Notification = Tables<'notificacoes'>;
 
 export interface NotificationWithContract extends Notification {
   contractId: string | null;
 }
 
 /**
- * Busca todas as notificações não lidas do usuário atual
- * userId deve ser o auth_user_id (UUID do Supabase Auth)
- * A RLS policy mostra que usuario_id = auth.uid(), então usamos o userId diretamente
+ * Lista notificações do usuário atual.
+ * RLS (migration 014) garante que apenas notificações do usuário autenticado
+ * são retornadas — não é necessário passar usuario_id.
  */
-export const getNotifications = async (userId: string): Promise<Notification[]> => {
-  try {
-    const { data, error } = await supabase
-      .from('notificacoes')
-      .select('*')
-      .eq('usuario_id', userId)
-      .eq('lida', false)
-      .order('created_at', { ascending: false });
+export async function listNotifications(filters?: { onlyUnread?: boolean }): Promise<Notification[]> {
+  let q = supabase
+    .from('notificacoes')
+    .select('*')
+    .order('data_envio', { ascending: false });
 
-    if (error) {
-      console.error('Error fetching notifications:', error);
-      throw error;
-    }
-
-    return data || [];
-  } catch (error) {
-    console.error('Error in getNotifications:', error);
-    throw error;
+  if (filters?.onlyUnread) {
+    q = q.eq('lida', false);
   }
-};
+
+  const { data, error } = await q;
+  if (error) {
+    throw new Error(`Erro ao listar notificações: ${error.message}`);
+  }
+  return data ?? [];
+}
 
 /**
- * Marca uma notificação como lida
+ * Marca uma notificação como lida.
+ * RLS permite update apenas se o usuário for o dono.
  */
-export const markAsRead = async (notificationId: string): Promise<void> => {
-  try {
-    const { error } = await supabase
-      .from('notificacoes')
-      .update({ lida: true })
-      .eq('id', notificationId);
+export async function markAsRead(notificationId: string): Promise<void> {
+  const { error } = await supabase
+    .from('notificacoes')
+    .update({ lida: true })
+    .eq('id', notificationId);
 
-    if (error) {
-      console.error('Error marking notification as read:', error);
-      throw error;
-    }
-  } catch (error) {
-    console.error('Error in markAsRead:', error);
-    throw error;
+  if (error) {
+    throw new Error(`Erro ao marcar notificação como lida: ${error.message}`);
   }
-};
+}
 
 /**
- * Remove uma notificação (fechar durante a sessão)
+ * Marca todas as notificações não lidas do usuário atual como lidas.
+ * RLS restringe automaticamente ao escopo do usuário autenticado.
  */
-export const dismissNotification = async (notificationId: string): Promise<void> => {
-  try {
-    const { error } = await supabase
-      .from('notificacoes')
-      .update({ lida: true })
-      .eq('id', notificationId);
+export async function markAllAsRead(): Promise<void> {
+  const { error } = await supabase
+    .from('notificacoes')
+    .update({ lida: true })
+    .eq('lida', false);
 
-    if (error) {
-      console.error('Error dismissing notification:', error);
-      throw error;
-    }
-  } catch (error) {
-    console.error('Error in dismissNotification:', error);
-    throw error;
+  if (error) {
+    throw new Error(`Erro ao marcar todas as notificações como lidas: ${error.message}`);
   }
-};
+}
 
 /**
- * Deleta uma notificação definitivamente
+ * Conta notificações não lidas do usuário atual.
+ * RLS restringe automaticamente ao escopo do usuário autenticado.
  */
-export const deleteNotification = async (notificationId: string): Promise<void> => {
-  try {
-    const { error } = await supabase
-      .from('notificacoes')
-      .delete()
-      .eq('id', notificationId);
+export async function countUnread(): Promise<number> {
+  const { count, error } = await supabase
+    .from('notificacoes')
+    .select('*', { count: 'exact', head: true })
+    .eq('lida', false);
 
-    if (error) {
-      console.error('Error deleting notification:', error);
-      throw error;
-    }
-  } catch (error) {
-    console.error('Error in deleteNotification:', error);
-    throw error;
+  if (error) {
+    throw new Error(`Erro ao contar notificações não lidas: ${error.message}`);
   }
-};
+  return count ?? 0;
+}
 
 /**
- * Busca o ID do contrato relacionado a uma licença
- * Retorna o primeiro contrato encontrado para a licença
+ * Alias para markAsRead — usado para "fechar" uma notificação na sessão.
  */
-export const getContractIdFromLicense = async (licenseId: string): Promise<string | null> => {
-  try {
-    const { data, error } = await supabase
-      .from('contratos')
-      .select('id')
-      .eq('licenca_id', licenseId)
-      .limit(1)
-      .single();
-
-    if (error) {
-      // Se não encontrar contrato, retorna null (não é erro crítico)
-      if (error.code === 'PGRST116') {
-        return null;
-      }
-      console.error('Error fetching contract from license:', error);
-      throw error;
-    }
-
-    return data?.id || null;
-  } catch (error) {
-    console.error('Error in getContractIdFromLicense:', error);
-    return null;
-  }
-};
+export async function dismissNotification(notificationId: string): Promise<void> {
+  return markAsRead(notificationId);
+}
 
 /**
- * Busca notificações com informações do contrato incluídas
+ * Deleta uma notificação definitivamente.
+ * RLS permite delete apenas se o usuário for o dono.
  */
-export const getNotificationsWithContract = async (userId: string): Promise<NotificationWithContract[]> => {
-  try {
-    const notifications = await getNotifications(userId);
-    
-    // Buscar contractId para cada notificação que tem licenca_id
-    const notificationsWithContract = await Promise.all(
-      notifications.map(async (notification) => {
-        let contractId: string | null = null;
-        
-        if (notification.licenca_id) {
+export async function deleteNotification(notificationId: string): Promise<void> {
+  const { error } = await supabase
+    .from('notificacoes')
+    .delete()
+    .eq('id', notificationId);
+
+  if (error) {
+    throw new Error(`Erro ao deletar notificação: ${error.message}`);
+  }
+}
+
+/**
+ * Criação de notificações é responsabilidade do banco (triggers).
+ * Mantido como stub para sinalizar a callers legados.
+ */
+export async function createNotificationForRequerente(): Promise<never> {
+  throw new Error(
+    'Notificações são criadas pelo sistema (triggers do banco), não pelo cliente.',
+  );
+}
+
+/**
+ * Busca o ID do contrato relacionado a uma licença.
+ * Retorna o primeiro contrato encontrado para a licença.
+ */
+export async function getContractIdFromLicense(licenseId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('contratos')
+    .select('id')
+    .eq('licenca_id', licenseId)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Erro ao buscar contrato da licença: ${error.message}`);
+  }
+  return data?.id ?? null;
+}
+
+/**
+ * Lista notificações enriquecidas com o ID do contrato associado (quando houver licença).
+ */
+export async function getNotificationsWithContract(
+  filters?: { onlyUnread?: boolean },
+): Promise<NotificationWithContract[]> {
+  const notifications = await listNotifications(filters);
+
+  const notificationsWithContract = await Promise.all(
+    notifications.map(async (notification) => {
+      let contractId: string | null = null;
+      if (notification.licenca_id) {
+        try {
           contractId = await getContractIdFromLicense(notification.licenca_id);
+        } catch {
+          contractId = null;
         }
-        
-        return {
-          ...notification,
-          contractId,
-        };
-      })
-    );
+      }
+      return { ...notification, contractId };
+    }),
+  );
 
-    return notificationsWithContract;
-  } catch (error) {
-    console.error('Error in getNotificationsWithContract:', error);
-    throw error;
-  }
-};
+  return notificationsWithContract;
+}
 
 /**
- * Cria notificação para o requerente
- * @param requerenteUserId auth_user_id do requerente
- * @param licenseId ID da licença
- * @param titulo Título da notificação
- * @param mensagem Mensagem da notificação
+ * @deprecated Use listNotifications({ onlyUnread: true }) — RLS já filtra pelo usuário.
  */
-export const createNotificationForRequerente = async (
-  requerenteUserId: string,
-  licenseId: string,
-  titulo: string,
-  mensagem: string
-): Promise<void> => {
-  try {
-    const { error } = await supabase
-      .from('notificacoes')
-      .insert({
-        usuario_id: requerenteUserId,
-        licenca_id: licenseId,
-        tipo: 'nova_edicao_solicitada',
-        titulo,
-        mensagem,
-        lida: false,
-        data_envio: new Date().toISOString(),
-      });
-
-    if (error) {
-      console.error('Error creating notification for requerente:', error);
-      throw error;
-    }
-  } catch (error) {
-    console.error('Error in createNotificationForRequerente:', error);
-    throw error;
-  }
-};
-
+export async function getNotifications(_userId?: string): Promise<Notification[]> {
+  return listNotifications({ onlyUnread: true });
+}

@@ -54,7 +54,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { maskCNPJ, maskDMS, maskDecimalTwoPlaces, decimalToDMS } from '@/utils/masks';
 import { validateCNPJ } from '@/utils/validators';
-import { getLicenseById, updateLicense, getUsuarioByCNPJ } from '@/services/licenseService';
+import { getLicenseById, updateLicense, getRequerenteByCpfCnpj } from "@/services/licenseService";
 import { useToast } from '@/hooks/use-toast';
 import {
   Select,
@@ -385,16 +385,16 @@ const EditLicense = () => {
       return;
     }
     try {
-      const usuario = await getUsuarioByCNPJ(formData.cnpj);
-      if (!usuario) {
-        toast({ title: 'Usuário não encontrado', description: 'Cadastre o usuário antes de prosseguir.', variant: 'destructive' });
+      const requerente = await getRequerenteByCpfCnpj(formData.cnpj);
+      if (!requerente) {
+        toast({ title: 'Requerente não encontrado', description: 'Cadastre o Requerente antes de prosseguir.', variant: 'destructive' });
         return;
       }
       setFormData((prev) => ({
         ...prev,
-        requesterName: usuario.nome || prev.requesterName,
+        requesterName: requerente.nome_razao_social || prev.requesterName,
       }));
-      toast({ title: 'Usuário localizado', description: 'Nome preenchido automaticamente.' });
+      toast({ title: 'Requerente localizado', description: 'Nome preenchido automaticamente.' });
     } catch (err) {
       toast({ title: 'Erro ao buscar usuário', description: 'Tente novamente mais tarde.', variant: 'destructive' });
     }

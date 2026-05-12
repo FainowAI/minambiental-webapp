@@ -1,5 +1,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import { dmsToDecimal } from '@/utils/masks';
+import type { Tables } from '@/integrations/supabase/types';
+import { createRequerente } from '@/services/requerenteService';
 
 export interface LicenseFilters {
   cnpj?: string;
@@ -16,6 +18,9 @@ type LicenseRequerente = {
   id: string;
   cpf_cnpj: string;
   nome_razao_social: string;
+  email?: string | null;
+  celular?: string | null;
+  tipo_pessoa?: string | null;
 };
 
 export interface LicenseData {
@@ -40,8 +45,10 @@ export interface LicenseDetails extends LicenseData {
   longitude: number | null;
   volume_anual_captado: number | null;
   pdf_licenca: string | null;
-  requerente: (LicenseRequerente & { email?: string | null }) | null;
+  requerente: LicenseRequerente | null;
 }
+
+const onlyDigits = (value: string) => value.replace(/\D/g, '');
 
 export const getLicenses = async (
   filters: LicenseFilters,
@@ -59,30 +66,33 @@ export const getLicenses = async (
         status,
         data_inicio,
         data_fim,
-        usuarios:requerente_id (
+        requerente:requerentes!licencas_requerente_id_fkey (
           id,
-          cpf,
-          nome
+          nome_razao_social,
+          cpf_cnpj,
+          email,
+          celular,
+          tipo_pessoa
         )
       `, { count: 'exact' });
 
     // Aplicar filtros
     if (filters.cnpj) {
-      query = query.ilike('usuarios.cpf', `%${filters.cnpj}%`);
+      query = query.ilike('requerente.cpf_cnpj', `%${filters.cnpj}%`);
     }
-    
+
     if (filters.requester) {
-      query = query.ilike('usuarios.nome', `%${filters.requester}%`);
+      query = query.ilike('requerente.nome_razao_social', `%${filters.requester}%`);
     }
-    
+
     if (filters.actType) {
       query = query.eq('tipo_ato', filters.actType);
     }
-    
+
     if (filters.municipality) {
       query = query.ilike('municipio', `%${filters.municipality}%`);
     }
-    
+
     if (filters.status) {
       query = query.eq('status', filters.status);
     }
@@ -91,7 +101,7 @@ export const getLicenses = async (
     if (filters.validityStart) {
       query = query.gte('data_inicio', filters.validityStart);
     }
-    
+
     if (filters.validityEnd) {
       query = query.lte('data_fim', filters.validityEnd);
     }
@@ -99,7 +109,7 @@ export const getLicenses = async (
     // Paginação
     const from = (page - 1) * itemsPerPage;
     const to = from + itemsPerPage - 1;
-    
+
     query = query
       .order('created_at', { ascending: false })
       .range(from, to);
@@ -111,14 +121,19 @@ export const getLicenses = async (
       throw error;
     }
 
-    // Transform data to match expected structure
+    // Normalizar shape do join (requerente já vem com as colunas certas)
     const transformedData = (data || []).map((license: any) => ({
       ...license,
-      requerente: license.usuarios ? {
-        id: license.usuarios.id,
-        cpf_cnpj: license.usuarios.cpf,
-        nome_razao_social: license.usuarios.nome
-      } : null
+      requerente: license.requerente
+        ? {
+            id: license.requerente.id,
+            cpf_cnpj: license.requerente.cpf_cnpj,
+            nome_razao_social: license.requerente.nome_razao_social,
+            email: license.requerente.email,
+            celular: license.requerente.celular,
+            tipo_pessoa: license.requerente.tipo_pessoa,
+          }
+        : null,
     }));
 
     return {
@@ -135,6 +150,7 @@ export const getLicenses = async (
 export interface CreateLicensePayload {
   numeroLicenca: string;
   cnpj: string;
+  nomeRazaoSocial?: string;
   tipoAto: string;
   objetoAto: string;
   tipoPontoInterferencia: string;
@@ -151,44 +167,56 @@ export interface CreateLicensePayload {
   pdfFile: File;
 }
 
-async function findUsuarioRequerenteByCNPJ(cnpj: string) {
+/**
+ * Busca um requerente pelo CPF/CNPJ (apenas dígitos).
+ */
+export async function getRequerenteByCpfCnpj(
+  cpfCnpj: string
+): Promise<Tables<'requerentes'> | null> {
   const { data, error } = await supabase
-    .from('usuarios')
-    .select('id, cpf, nome, email, celular, perfil')
-    .eq('cpf', cnpj.replace(/\D/g, ''))
-    .eq('perfil', 'Requerente')
+    .from('requerentes')
+    .select('*')
+    .eq('cpf_cnpj', onlyDigits(cpfCnpj))
     .maybeSingle();
 
   if (error) throw error;
   return data;
 }
 
-export const getUsuarioRequerenteByCNPJ = async (cnpj: string) => {
-  return await findUsuarioRequerenteByCNPJ(cnpj);
-};
+/**
+ * Resolve o requerente_id para uma licença. Se o requerente não existir,
+ * cria via edge function (RLS bloqueia insert direto pelo client).
+ */
+async function resolveRequerenteId(cpfCnpj: string, nomeRazaoSocial?: string): Promise<string> {
+  const existing = await getRequerenteByCpfCnpj(cpfCnpj);
+  if (existing?.id) return existing.id;
 
-// Manter getUsuarioByCNPJ para compatibilidade (sem filtro de perfil)
-export const getUsuarioByCNPJ = async (cnpj: string) => {
-  const { data, error } = await supabase
-    .from('usuarios')
-    .select('id, cpf, nome')
-    .eq('cpf', cnpj.replace(/\D/g, ''))
-    .maybeSingle();
+  if (!nomeRazaoSocial) {
+    throw new Error(
+      'Requerente não encontrado para o CPF/CNPJ informado e nome/razão social não fornecido para cadastro automático.'
+    );
+  }
 
-  if (error) throw error;
-  return data;
-};
+  const result = await createRequerente({
+    cpf: onlyDigits(cpfCnpj),
+    nome: nomeRazaoSocial,
+  });
+
+  const newId: string | undefined = result?.id ?? result?.data?.id ?? result?.requerente?.id;
+  if (!newId) {
+    throw new Error('Falha ao cadastrar Requerente automaticamente.');
+  }
+  return newId;
+}
 
 async function uploadPdf(file: File, requerenteId: string, numeroLicenca: string): Promise<string> {
   const bucket = 'licencas';
-  
-  // Sanitizar nome do arquivo
-  const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9_.-]/g, '_');
-  
-  // Estrutura: pdfs/{requerente_id}/{numero_licenca}_{timestamp}_{arquivo}
+
+  // Estrutura: licencas/{requerente_id}/{numero_licenca}_{timestamp}.pdf
   const timestamp = Date.now();
-  const filePath = `pdfs/${requerenteId}/${numeroLicenca}_${timestamp}_${sanitizedFileName}`;
-  
+  const safeNumero = numeroLicenca.replace(/[^a-zA-Z0-9_.-]/g, '_');
+  const filePath = `licencas/${requerenteId}/${safeNumero}_${timestamp}.pdf`;
+
   const { error: uploadError } = await supabase.storage
     .from(bucket)
     .upload(filePath, file, {
@@ -204,7 +232,7 @@ async function uploadPdf(file: File, requerenteId: string, numeroLicenca: string
   return filePath;
 }
 
-// Bucket 'licencas' é privado — gerar URL assinada (TTL 15min)
+// Bucket 'licencas' é privado — gerar URL assinada (TTL 1h)
 // pathOrUrl pode ser path relativo (novos registros) ou URL pública antiga
 export async function getLicensePdfSignedUrl(pathOrUrl: string): Promise<string> {
   let storagePath = pathOrUrl;
@@ -220,21 +248,26 @@ export async function getLicensePdfSignedUrl(pathOrUrl: string): Promise<string>
 
   const { data, error } = await supabase.storage
     .from('licencas')
-    .createSignedUrl(storagePath, 900);
+    .createSignedUrl(storagePath, 60 * 60);
   if (error) throw error;
   return data.signedUrl;
 }
 
-export const createLicense = async (payload: CreateLicensePayload) => {
-  // 1) Buscar requerente na tabela usuarios
-  const usuario = await findUsuarioRequerenteByCNPJ(payload.cnpj);
-  
-  if (!usuario?.id) {
-    throw new Error('Requerente não encontrado. Cadastre o usuário com perfil Requerente antes de prosseguir.');
+function validateLicenseDates(dataInicio: string, dataFim: string) {
+  if (new Date(dataFim) <= new Date(dataInicio)) {
+    throw new Error('A data de validade deve ser posterior à data de início.');
   }
+}
+
+export const createLicense = async (payload: CreateLicensePayload) => {
+  // 0) Validar datas (cliente-side; constraint de DB também protege)
+  validateLicenseDates(payload.dataInicio, payload.dataFim);
+
+  // 1) Resolver requerente (busca em `requerentes`; cria via edge function se não existir)
+  const requerenteId = await resolveRequerenteId(payload.cnpj, payload.nomeRazaoSocial);
 
   // 2) Upload PDF com estrutura organizada
-  const pdfUrl = await uploadPdf(payload.pdfFile, usuario.id, payload.numeroLicenca);
+  const pdfPath = await uploadPdf(payload.pdfFile, requerenteId, payload.numeroLicenca);
 
   // 3) Conversões de dados
   const latitude = dmsToDecimal(payload.latitudeDms);
@@ -257,9 +290,9 @@ export const createLicense = async (payload: CreateLicensePayload) => {
     volume_anual_captado: Number.isFinite(volume) ? volume : null,
     data_inicio: payload.dataInicio,
     data_fim: payload.dataFim,
-    pdf_licenca: pdfUrl,
-    requerente_id: usuario.id, // Agora referencia usuarios.id
-    status: 'Ativo', // Padronizar como 'Ativo'
+    pdf_licenca: pdfPath,
+    requerente_id: requerenteId,
+    status: 'Ativo',
   });
 
   if (error) {
@@ -289,11 +322,13 @@ export const getLicenseById = async (id: string): Promise<LicenseDetails | null>
       data_fim,
       status,
       pdf_licenca,
-      usuarios:requerente_id (
+      requerente:requerentes!licencas_requerente_id_fkey (
         id,
-        cpf,
-        nome,
-        email
+        nome_razao_social,
+        cpf_cnpj,
+        email,
+        celular,
+        tipo_pessoa
       )
     `)
     .eq('id', id)
@@ -307,6 +342,8 @@ export const getLicenseById = async (id: string): Promise<LicenseDetails | null>
   if (!data) {
     return null;
   }
+
+  const requerenteRow: any = (data as any).requerente;
 
   return {
     id: data.id,
@@ -326,12 +363,14 @@ export const getLicenseById = async (id: string): Promise<LicenseDetails | null>
     data_fim: data.data_fim,
     status: data.status,
     pdf_licenca: data.pdf_licenca,
-    requerente: data.usuarios
+    requerente: requerenteRow
       ? {
-          id: data.usuarios.id,
-          cpf_cnpj: data.usuarios.cpf,
-          nome_razao_social: data.usuarios.nome,
-          email: data.usuarios.email,
+          id: requerenteRow.id,
+          cpf_cnpj: requerenteRow.cpf_cnpj,
+          nome_razao_social: requerenteRow.nome_razao_social,
+          email: requerenteRow.email,
+          celular: requerenteRow.celular,
+          tipo_pessoa: requerenteRow.tipo_pessoa,
         }
       : null,
   };
@@ -341,6 +380,7 @@ export interface UpdateLicensePayload {
   id: string;
   numeroLicenca: string;
   cnpj: string;
+  nomeRazaoSocial?: string;
   tipoAto: string;
   objetoAto: string;
   tipoPontoInterferencia: string;
@@ -358,19 +398,17 @@ export interface UpdateLicensePayload {
 }
 
 export const updateLicense = async (payload: UpdateLicensePayload) => {
-  const usuario = await findUsuarioRequerenteByCNPJ(payload.cnpj);
+  validateLicenseDates(payload.dataInicio, payload.dataFim);
 
-  if (!usuario?.id) {
-    throw new Error('Requerente não encontrado. Cadastre o usuário com perfil Requerente antes de prosseguir.');
-  }
+  const requerenteId = await resolveRequerenteId(payload.cnpj, payload.nomeRazaoSocial);
 
   const latitude = dmsToDecimal(payload.latitudeDms);
   const longitude = dmsToDecimal(payload.longitudeDms);
   const volume = Number(payload.volumeAnual.replace(/\./g, '').replace(',', '.')) || Number(payload.volumeAnual);
 
-  let pdfUrl: string | undefined;
+  let pdfPath: string | undefined;
   if (payload.pdfFile) {
-    pdfUrl = await uploadPdf(payload.pdfFile, usuario.id, payload.numeroLicenca);
+    pdfPath = await uploadPdf(payload.pdfFile, requerenteId, payload.numeroLicenca);
   }
 
   const updateData: Record<string, unknown> = {
@@ -388,11 +426,11 @@ export const updateLicense = async (payload: UpdateLicensePayload) => {
     volume_anual_captado: Number.isFinite(volume) ? volume : null,
     data_inicio: payload.dataInicio,
     data_fim: payload.dataFim,
-    requerente_id: usuario.id,
+    requerente_id: requerenteId,
   };
 
-  if (pdfUrl) {
-    updateData.pdf_licenca = pdfUrl;
+  if (pdfPath) {
+    updateData.pdf_licenca = pdfPath;
   }
 
   const { error } = await supabase
@@ -405,3 +443,64 @@ export const updateLicense = async (payload: UpdateLicensePayload) => {
     throw new Error(`Erro ao atualizar licença: ${error.message}`);
   }
 };
+
+// ============================================================================
+// Lookup helpers — alimentam <Select> no formulário de licenças.
+// As colunas correspondentes em `licencas` continuam TEXT por ora (migração
+// 015 ainda não converteu para FK).
+// ============================================================================
+
+export interface RefOption {
+  codigo: string;
+  nome: string;
+}
+
+export async function getRefTiposAto(): Promise<RefOption[]> {
+  const { data, error } = await supabase
+    .from('ref_tipos_ato' as any)
+    .select('codigo, nome')
+    .eq('ativo', true)
+    .order('nome');
+  if (error) throw error;
+  return (data ?? []) as RefOption[];
+}
+
+export async function getRefFinalidadesUso(): Promise<RefOption[]> {
+  const { data, error } = await supabase
+    .from('ref_finalidades_uso' as any)
+    .select('codigo, nome')
+    .eq('ativo', true)
+    .order('nome');
+  if (error) throw error;
+  return (data ?? []) as RefOption[];
+}
+
+export async function getRefMunicipiosMs(): Promise<RefOption[]> {
+  const { data, error } = await supabase
+    .from('ref_municipios_ms' as any)
+    .select('codigo, nome')
+    .eq('ativo', true)
+    .order('nome');
+  if (error) throw error;
+  return (data ?? []) as RefOption[];
+}
+
+export async function getRefSistemasAquiferos(): Promise<RefOption[]> {
+  const { data, error } = await supabase
+    .from('ref_sistemas_aquiferos' as any)
+    .select('codigo, nome')
+    .eq('ativo', true)
+    .order('nome');
+  if (error) throw error;
+  return (data ?? []) as RefOption[];
+}
+
+export async function getRefUnidadesPlanejamento(): Promise<RefOption[]> {
+  const { data, error } = await supabase
+    .from('ref_unidades_planejamento' as any)
+    .select('codigo, nome')
+    .eq('ativo', true)
+    .order('nome');
+  if (error) throw error;
+  return (data ?? []) as RefOption[];
+}

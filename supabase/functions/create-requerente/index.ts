@@ -1,10 +1,23 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+// NOTE: post-Sprint-0b (migration 015) schema:
+//   - requerentes é entidade própria (NÃO em usuarios; NÃO cria auth.users)
+//   - cpf_cnpj é UNIQUE (constraint do banco — captura 23505 abaixo)
+//   - Requerente NÃO loga no sistema; sem auth_user_id.
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const jsonResponse = (body: unknown, status: number) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -14,16 +27,14 @@ serve(async (req) => {
   try {
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      { auth: { autoRefreshToken: false, persistSession: false } }
     );
 
-    // 1. Authenticate requesting user (admin Corpo Técnico)
+    // 1. Autenticar solicitante
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: 'Token de autenticação não fornecido' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return jsonResponse({ error: 'Token de autenticação não fornecido' }, 401);
     }
 
     const token = authHeader.replace('Bearer ', '');
@@ -31,133 +42,154 @@ serve(async (req) => {
 
     if (authError || !user) {
       console.error('Auth error:', authError);
-      return new Response(
-        JSON.stringify({ error: 'Não autenticado' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      return jsonResponse({ error: 'Não autenticado' }, 401);
+    }
+
+    // 2. Verificar que solicitante é Corpo Técnico aprovado
+    const { data: rpcResult, error: rpcError } = await supabase.rpc(
+      'is_corpo_tecnico',
+      { _auth_user_id: user.id }
+    );
+
+    if (rpcError) {
+      console.error('RPC is_corpo_tecnico error:', rpcError);
+      return jsonResponse(
+        { error: 'Falha ao verificar permissões do solicitante' },
+        500
       );
     }
 
-    // 2. Verify requester is approved Corpo Técnico
-    const { data: requester, error: requesterError } = await supabase
-      .from('usuarios')
-      .select('perfil, status_aprovacao')
-      .eq('auth_user_id', user.id)
-      .maybeSingle();
-
-    if (requesterError || !requester) {
-      console.error('Requester error:', requesterError);
-      return new Response(
-        JSON.stringify({ error: 'Perfil do usuário não encontrado' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    if (rpcResult !== true) {
+      return jsonResponse({ error: 'Sem permissão para criar Requerentes' }, 403);
     }
 
-    if (requester.perfil !== 'Corpo Técnico' || requester.status_aprovacao !== 'Aprovado') {
-      return new Response(
-        JSON.stringify({ error: 'Sem permissão para criar usuários' }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    // 3. Parse + validar payload
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
+      return jsonResponse({ error: 'Payload JSON inválido' }, 400);
     }
 
-    // 3. Validate payload
-    const { 
-      nome, 
-      cpf, 
+    const {
+      tipo_pessoa,
+      cpf_cnpj,
+      nome_razao_social,
       email,
       celular,
+      contato_medicao_nome,
       contato_medicao_cpf,
       contato_medicao_email,
-      contato_medicao_celular
-    } = await req.json();
+      contato_medicao_celular,
+    } = body ?? {};
 
-    if (!nome || !cpf) {
-      return new Response(
-        JSON.stringify({ error: 'Nome e CPF/CNPJ são obrigatórios' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    if (!tipo_pessoa || !cpf_cnpj || !nome_razao_social) {
+      return jsonResponse(
+        { error: 'Campos obrigatórios: tipo_pessoa, cpf_cnpj, nome_razao_social' },
+        400
       );
     }
 
-    console.log('Attempting to create Requerente with CPF:', cpf);
+    if (!['PF', 'PJ'].includes(tipo_pessoa)) {
+      return jsonResponse(
+        { error: 'tipo_pessoa inválido. Use "PF" ou "PJ".' },
+        400
+      );
+    }
 
-    // 4. Check duplicate by CPF
-    const { data: existingByCPF } = await supabase
-      .from('usuarios')
-      .select('cpf, nome, perfil')
-      .eq('cpf', cpf)
+    const cpfCnpjDigits = String(cpf_cnpj).replace(/\D/g, '');
+
+    if (tipo_pessoa === 'PF' && cpfCnpjDigits.length !== 11) {
+      return jsonResponse({ error: 'CPF deve conter 11 dígitos' }, 400);
+    }
+    if (tipo_pessoa === 'PJ' && cpfCnpjDigits.length !== 14) {
+      return jsonResponse({ error: 'CNPJ deve conter 14 dígitos' }, 400);
+    }
+
+    if (email && !EMAIL_REGEX.test(email)) {
+      return jsonResponse({ error: 'Email inválido' }, 400);
+    }
+    if (contato_medicao_email && !EMAIL_REGEX.test(contato_medicao_email)) {
+      return jsonResponse(
+        { error: 'Email do contato de medição inválido' },
+        400
+      );
+    }
+
+    // 4. Pré-check duplicidade (ignora soft-deleted) — UX-friendly antes do insert.
+    //    A UNIQUE constraint do banco é a fonte de verdade; race condition é tratada
+    //    abaixo no catch de 23505.
+    const { data: existing, error: dupError } = await supabase
+      .from('requerentes')
+      .select('id, nome_razao_social')
+      .eq('cpf_cnpj', cpfCnpjDigits)
+      .is('deleted_at', null)
       .maybeSingle();
 
-    if (existingByCPF) {
-      console.log('Duplicate CPF found:', existingByCPF);
-      return new Response(
-        JSON.stringify({ 
-          error: `CPF/CNPJ ${cpf} já cadastrado no sistema para ${existingByCPF.nome} (${existingByCPF.perfil})` 
-        }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    if (dupError) {
+      console.error('Duplicate check error:', dupError);
+      return jsonResponse(
+        { error: `Erro ao verificar duplicidade: ${dupError.message}` },
+        500
       );
     }
 
-    // 5. Check duplicate by email (if provided)
-    if (email) {
-      const { data: existingByEmail } = await supabase
-        .from('usuarios')
-        .select('email')
-        .eq('email', email)
-        .maybeSingle();
-
-      if (existingByEmail) {
-        return new Response(
-          JSON.stringify({ error: 'Email já cadastrado no sistema' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
+    if (existing) {
+      return jsonResponse(
+        { error: 'Já existe um Requerente cadastrado com este CPF/CNPJ.' },
+        409
+      );
     }
 
-    // 6. Insert into usuarios table (WITHOUT creating Auth User)
-    const insertData = {
-      auth_user_id: null,  // Requerente doesn't have Auth User
-      nome,
-      cpf,
-      email: email || null,
-      celular: celular || null,
-      perfil: 'Requerente',
-      status_aprovacao: 'Pendente',
-      contato_medicao_cpf: contato_medicao_cpf || null,
-      contato_medicao_email: contato_medicao_email || null,
-      contato_medicao_celular: contato_medicao_celular || null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+    // 5. Inserir em requerentes
+    const insertData: any = {
+      tipo_pessoa,
+      cpf_cnpj: cpfCnpjDigits,
+      nome_razao_social: String(nome_razao_social).trim(),
+      email: email ?? null,
+      celular: celular ? String(celular).replace(/\D/g, '') : null,
+      contato_medicao_nome: contato_medicao_nome ?? null,
+      contato_medicao_cpf: contato_medicao_cpf
+        ? String(contato_medicao_cpf).replace(/\D/g, '')
+        : null,
+      contato_medicao_email: contato_medicao_email ?? null,
+      contato_medicao_celular: contato_medicao_celular
+        ? String(contato_medicao_celular).replace(/\D/g, '')
+        : null,
+      status: 'ativo',
+      created_by: user.id,
+      updated_by: user.id,
     };
 
-    const { data: usuario, error: insertError } = await supabase
-      .from('usuarios')
-      .insert(insertData)
+    const { data: requerente, error: insertError } = await supabase
+      .from('requerentes')
+      .insert(insertData as never)
       .select()
       .single();
 
     if (insertError) {
-      console.error('Insert error:', insertError);
-      return new Response(
-        JSON.stringify({ error: `Erro ao criar Requerente: ${insertError.message}` }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      console.error('Insert requerentes error:', insertError);
+      // 23505 = unique_violation. Captura race ou caso o pré-check tenha falhado.
+      if ((insertError as any)?.code === '23505') {
+        return jsonResponse(
+          { error: 'Já existe um Requerente cadastrado com este CPF/CNPJ.' },
+          409
+        );
+      }
+      return jsonResponse(
+        { error: `Erro ao criar Requerente: ${insertError.message}` },
+        500
       );
     }
 
-    console.log('Requerente created successfully:', usuario.id);
+    console.log('Requerente created successfully:', (requerente as any).id);
 
-    return new Response(
-      JSON.stringify({ 
-        success: true,
-        usuario: usuario,
-        requiresApproval: true
-      }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-
+    return jsonResponse({ success: true, requerente }, 200);
   } catch (error) {
-    console.error('Error:', error);
-    return new Response(
-      JSON.stringify({ error: (error as Error).message || 'Erro desconhecido' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    console.error('Error in create-requerente function:', error);
+    return jsonResponse(
+      { error: (error as Error)?.message ?? 'Erro interno do servidor' },
+      500
     );
   }
 });

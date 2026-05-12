@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { useQuery } from '@tanstack/react-query';
 import { useFormAutosave } from '@/hooks/useFormAutosave';
 import { useUnsavedChangesPrompt } from '@/hooks/useUnsavedChangesPrompt';
 import {
@@ -12,8 +13,9 @@ import {
   X,
   Save,
   ArrowLeft,
-  Search,
   Upload,
+  CheckCircle2,
+  Loader2,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -52,9 +54,17 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { maskCNPJ, maskDMS, maskDecimalTwoPlaces } from '@/utils/masks';
-import { validateCNPJ, validateDMS, validatePdfFile } from '@/utils/validators';
-import { createLicense, getUsuarioByCNPJ } from '@/services/licenseService';
+import { maskCPFOrCNPJ, maskDMS, maskDecimalTwoPlaces } from '@/utils/masks';
+import { validateCPFOrCNPJ, validateDMS, validatePdfFile, validateEmail, validatePhone } from '@/utils/validators';
+import {
+  createLicense,
+  getRefTiposAto,
+  getRefFinalidadesUso,
+  getRefMunicipiosMs,
+  getRefSistemasAquiferos,
+  getRefUnidadesPlanejamento,
+} from '@/services/licenseService';
+import { findRequerenteByCpfCnpj } from '@/services/requerenteService';
 import { useToast } from '@/hooks/use-toast';
 import {
   Select,
@@ -66,7 +76,7 @@ import {
 
 interface LicenseFormData {
   licenseNumber: string;
-  cnpj: string;
+  cpfCnpj: string;
   requesterName: string;
   act: string;
   actObject: string;
@@ -84,13 +94,38 @@ interface LicenseFormData {
   pdfFile: File | null;
 }
 
+const onlyDigits = (value: string) => value.replace(/\D/g, '');
+
 const CreateLicense = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { toast } = useToast();
+
+  // Lookups (ref_*) — alimentam os <Select>
+  const { data: tiposAto = [] } = useQuery({
+    queryKey: ['ref_tipos_ato'],
+    queryFn: getRefTiposAto,
+  });
+  const { data: finalidadesUso = [] } = useQuery({
+    queryKey: ['ref_finalidades_uso'],
+    queryFn: getRefFinalidadesUso,
+  });
+  const { data: municipios = [] } = useQuery({
+    queryKey: ['ref_municipios_ms'],
+    queryFn: getRefMunicipiosMs,
+  });
+  const { data: sistemasAquiferos = [] } = useQuery({
+    queryKey: ['ref_sistemas_aquiferos'],
+    queryFn: getRefSistemasAquiferos,
+  });
+  const { data: unidadesPlanejamento = [] } = useQuery({
+    queryKey: ['ref_unidades_planejamento'],
+    queryFn: getRefUnidadesPlanejamento,
+  });
 
   const [formData, setFormData] = useState<LicenseFormData>({
     licenseNumber: '',
-    cnpj: '',
+    cpfCnpj: '',
     requesterName: '',
     act: '',
     actObject: '',
@@ -110,7 +145,16 @@ const CreateLicense = () => {
 
   const [fileName, setFileName] = useState<string>('');
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const { toast } = useToast();
+  const [requesterEmail, setRequesterEmail] = useState<string>('');
+  const [requesterPhone, setRequesterPhone] = useState<string>('');
+
+  // Estado do Requerente (lookup por CPF/CNPJ)
+  const [existingRequerenteId, setExistingRequerenteId] = useState<string | null>(null);
+  const [requerenteFound, setRequerenteFound] = useState<boolean>(false);
+  const [isLookingUp, setIsLookingUp] = useState<boolean>(false);
+
+  // Ref para saber se o usuário editou manualmente a data fim
+  const manuallyEditedDataFimRef = useRef<boolean>(false);
 
   // Autosave hook
   const autosaveKey = 'create_license_draft';
@@ -123,7 +167,7 @@ const CreateLicense = () => {
   const isDirty = () => {
     return (
       formData.licenseNumber.trim() !== '' ||
-      formData.cnpj.trim() !== '' ||
+      formData.cpfCnpj.trim() !== '' ||
       formData.act.trim() !== '' ||
       formData.actObject.trim() !== '' ||
       formData.municipality.trim() !== '' ||
@@ -156,12 +200,71 @@ const CreateLicense = () => {
         });
       }
     }
-  }, [restoreDraft, toast]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // Municípios de Mato Grosso do Sul (CA 08)
-  const MS_MUNICIPIOS = [
-    'Água Clara','Alcinópolis','Amambai','Anastácio','Anaurilândia','Angélica','Antônio João','Aparecida do Taboado','Aquidauana','Aral Moreira','Bandeirantes','Bataguassu','Bataiporã','Bela Vista','Bodoquena','Bonito','Brasilândia','Caarapó','Camapuã','Campo Grande','Caracol','Cassilândia','Chapadão do Sul','Corguinho','Coronel Sapucaia','Corumbá','Costa Rica','Coxim','Deodápolis','Dois Irmãos do Buriti','Douradina','Dourados','Eldorado','Fátima do Sul','Figueirão','Glória de Dourados','Guia Lopes da Laguna','Iguatemi','Inocência','Itaporã','Itaquiraí','Ivinhema','Japorã','Jaraguari','Jardim','Jateí','Juti','Ladário','Laguna Carapã','Maracaju','Miranda','Mundo Novo','Naviraí','Nioaque','Nova Alvorada do Sul','Nova Andradina','Novo Horizonte do Sul','Paranaíba','Paranhos','Pedro Gomes','Ponta Porã','Porto Murtinho','Ribas do Rio Pardo','Rio Brilhante','Rio Negro','Rio Verde de Mato Grosso','Rochedo','Santa Rita do Pardo','São Gabriel do Oeste','Selvíria','Sete Quedas','Sidrolândia','Sonora','Tacuru','Taquarussu','Terenos','Três Lagoas','Vicentina'
-  ];
+  // Auto-calcular data_fim = data_inicio + 10 anos (CA09) salvo se o usuário editou manualmente
+  useEffect(() => {
+    if (formData.validityStart && !manuallyEditedDataFimRef.current) {
+      const start = new Date(formData.validityStart);
+      if (!Number.isNaN(start.getTime())) {
+        const end = new Date(start);
+        end.setFullYear(end.getFullYear() + 10);
+        const iso = end.toISOString().slice(0, 10);
+        setFormData((prev) => (prev.validityEnd === iso ? prev : { ...prev, validityEnd: iso }));
+      }
+    }
+  }, [formData.validityStart]);
+
+  // Lookup do Requerente por CPF/CNPJ — com debounce
+  useEffect(() => {
+    const digits = onlyDigits(formData.cpfCnpj);
+    if (digits.length !== 11 && digits.length !== 14) {
+      setRequerenteFound(false);
+      setExistingRequerenteId(null);
+      return;
+    }
+    const { valid } = validateCPFOrCNPJ(digits);
+    if (!valid) {
+      setRequerenteFound(false);
+      setExistingRequerenteId(null);
+      return;
+    }
+
+    let cancelled = false;
+    setIsLookingUp(true);
+    const handle = setTimeout(async () => {
+      try {
+        const row = await findRequerenteByCpfCnpj(digits);
+        if (cancelled) return;
+        if (row) {
+          setExistingRequerenteId(row.id);
+          setRequerenteFound(true);
+          setFormData((prev) => ({
+            ...prev,
+            requesterName: row.nome_razao_social ?? prev.requesterName,
+          }));
+          setRequesterEmail(row.email ?? '');
+          setRequesterPhone(row.celular ?? '');
+        } else {
+          setExistingRequerenteId(null);
+          setRequerenteFound(false);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.error('Erro ao buscar Requerente:', err);
+        }
+      } finally {
+        if (!cancelled) setIsLookingUp(false);
+      }
+    }, 500);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+      setIsLookingUp(false);
+    };
+  }, [formData.cpfCnpj]);
 
   // Navigation items for the sidebar
   const navItems = [
@@ -195,39 +298,84 @@ const CreateLicense = () => {
     navigate('/licenses');
   };
 
-  const handleSave = async () => {
-    // Validações básicas
+  const validateForm = (): Record<string, string> => {
     const newErrors: Record<string, string> = {};
-    if (!formData.licenseNumber) newErrors.licenseNumber = 'Campo obrigatório';
-    if (!formData.cnpj || !validateCNPJ(formData.cnpj)) newErrors.cnpj = 'CNPJ inválido';
+
+    if (!formData.licenseNumber.trim()) newErrors.licenseNumber = 'Campo obrigatório';
+
+    const cpfCnpjDigits = onlyDigits(formData.cpfCnpj);
+    if (!cpfCnpjDigits) {
+      newErrors.cpfCnpj = 'Campo obrigatório';
+    } else {
+      const { valid } = validateCPFOrCNPJ(cpfCnpjDigits);
+      if (!valid) newErrors.cpfCnpj = 'CPF/CNPJ inválido';
+    }
+
+    if (!formData.requesterName.trim()) newErrors.requesterName = 'Campo obrigatório';
     if (!formData.act) newErrors.act = 'Campo obrigatório';
-    if (!formData.actObject) newErrors.actObject = 'Campo obrigatório';
+    if (!formData.actObject.trim()) newErrors.actObject = 'Campo obrigatório';
+    if (!formData.useFinality) newErrors.useFinality = 'Campo obrigatório';
     if (!formData.municipality) newErrors.municipality = 'Campo obrigatório';
+    if (!formData.state.trim()) newErrors.state = 'Campo obrigatório';
     if (!formData.validityStart) newErrors.validityStart = 'Campo obrigatório';
     if (!formData.validityEnd) newErrors.validityEnd = 'Campo obrigatório';
-    if (!formData.pdfFile) newErrors.pdfFile = 'Arquivo PDF obrigatório';
+
+    if (formData.validityStart && formData.validityEnd) {
+      if (new Date(formData.validityEnd) <= new Date(formData.validityStart)) {
+        newErrors.validityEnd = 'A data fim deve ser posterior à data de início';
+      }
+    }
+
+    if (formData.latitude && !validateDMS(formData.latitude)) {
+      newErrors.latitude = 'Formato DMS inválido';
+    }
+    if (formData.longitude && !validateDMS(formData.longitude)) {
+      newErrors.longitude = 'Formato DMS inválido';
+    }
+
+    if (requesterEmail && !validateEmail(requesterEmail)) {
+      newErrors.requesterEmail = 'E-mail inválido';
+    }
+    if (requesterPhone && !validatePhone(requesterPhone)) {
+      newErrors.requesterPhone = 'Celular inválido';
+    }
+
+    if (!formData.pdfFile) {
+      newErrors.pdfFile = 'Arquivo PDF obrigatório';
+    } else if (!validatePdfFile(formData.pdfFile)) {
+      newErrors.pdfFile = 'Apenas arquivos PDF são aceitos';
+    }
+
+    return newErrors;
+  };
+
+  const handleSave = async () => {
+    const newErrors = validateForm();
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       toast({
-        title: 'Campos obrigatórios',
-        description: 'Preencha todos os campos marcados com *',
-        variant: 'destructive'
+        title: 'Verifique os campos',
+        description: 'Preencha corretamente todos os campos obrigatórios.',
+        variant: 'destructive',
       });
       return;
     }
 
-    // Estado de loading
-    const loadingToastId = toast({
+    setErrors({});
+
+    toast({
       title: 'Salvando licença...',
       description: 'Enviando dados e arquivo PDF. Aguarde.',
-      duration: Infinity,
     });
 
     try {
-      const payload: any = {
+      const cpfCnpjDigits = onlyDigits(formData.cpfCnpj);
+
+      await createLicense({
         numeroLicenca: formData.licenseNumber,
-        cnpj: formData.cnpj,
+        cnpj: cpfCnpjDigits,
+        nomeRazaoSocial: formData.requesterName,
         tipoAto: formData.act,
         objetoAto: formData.actObject,
         tipoPontoInterferencia: formData.interferenceType,
@@ -241,34 +389,21 @@ const CreateLicense = () => {
         volumeAnual: formData.annualVolume,
         dataInicio: formData.validityStart,
         dataFim: formData.validityEnd,
-        pdfFile: formData.pdfFile,
-      };
+        pdfFile: formData.pdfFile as File,
+      });
 
-      await createLicense(payload);
-
-      // Sucesso
       clearDraft();
       toast({
         title: 'Licença cadastrada com sucesso!',
         description: 'A licença foi salva e o PDF foi enviado.',
       });
 
-      // Redirecionar após 1.5s
       setTimeout(() => {
         navigate('/licenses');
       }, 1500);
-
     } catch (error: any) {
-      // Tratamento de erros específicos
-      let errorMessage = 'Ocorreu um erro ao salvar a licença. Tente novamente.';
-      
-      if (error.message?.includes('Requerente não encontrado')) {
-        errorMessage = 'CNPJ não encontrado. Cadastre o requerente antes de criar a licença.';
-      } else if (error.message?.includes('upload')) {
-        errorMessage = 'Erro ao fazer upload do PDF. Verifique o arquivo e tente novamente.';
-      } else if (error.message?.includes('criar licença')) {
-        errorMessage = 'Erro ao salvar os dados da licença no banco de dados.';
-      }
+      const errorMessage =
+        error?.message || 'Ocorreu um erro ao salvar a licença. Tente novamente.';
 
       toast({
         title: 'Erro ao salvar',
@@ -282,9 +417,10 @@ const CreateLicense = () => {
 
   const updateFormField = (field: keyof LicenseFormData, value: string | File | null) => {
     setErrors((e) => ({ ...e, [field as string]: '' }));
-    // Máscaras e efeitos colaterais
-    if (field === 'cnpj' && typeof value === 'string') {
-      value = maskCNPJ(value);
+
+    // Máscaras
+    if (field === 'cpfCnpj' && typeof value === 'string') {
+      value = maskCPFOrCNPJ(value);
     }
     if ((field === 'latitude' || field === 'longitude') && typeof value === 'string') {
       value = maskDMS(value);
@@ -292,44 +428,29 @@ const CreateLicense = () => {
     if (field === 'annualVolume' && typeof value === 'string') {
       value = maskDecimalTwoPlaces(value);
     }
-    if (field === 'validityStart' && typeof value === 'string' && value) {
-      const start = new Date(value);
-      const end = new Date(start);
-      end.setFullYear(start.getFullYear() + 10); // CA09
-      setFormData((prev) => ({ ...prev, validityStart: value, validityEnd: end.toISOString().slice(0, 10) }));
-      return;
+
+    // Detecta edição manual da data fim
+    if (field === 'validityEnd') {
+      manuallyEditedDataFimRef.current = true;
     }
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    // Mudar a data início "destrava" o auto-cálculo (volta a sincronizar)
+    if (field === 'validityStart') {
+      manuallyEditedDataFimRef.current = false;
+    }
+
+    setFormData((prev) => ({ ...prev, [field]: value as any }));
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (!validatePdfFile(file)) {
+        setErrors((e) => ({ ...e, pdfFile: 'Apenas arquivos PDF são aceitos' }));
+        return;
+      }
       setFileName(file.name);
       updateFormField('pdfFile', file);
     }
-  };
-
-  const handleLookupRequester = async () => {
-    if (!formData.cnpj || !validateCNPJ(formData.cnpj)) {
-      setErrors((e) => ({ ...e, cnpj: 'dos os municípios do Estado de Mato Grosso do Sul' }));
-      toast({ title: 'CNPJ inválido', description: 'Verifique o CNPJ informado.', variant: 'destructive' });
-      return;
-    }
-  try {
-    const usuario = await getUsuarioByCNPJ(formData.cnpj);
-    if (!usuario) {
-      toast({ title: 'Usuário não encontrado', description: 'Cadastre o usuário antes de prosseguir.', variant: 'destructive' });
-      return;
-    }
-    setFormData((prev) => ({
-      ...prev,
-      requesterName: usuario.nome || prev.requesterName,
-    }));
-    toast({ title: 'Usuário localizado', description: 'Nome preenchido automaticamente.' });
-  } catch (err) {
-    toast({ title: 'Erro ao buscar usuário', description: 'Tente novamente mais tarde.', variant: 'destructive' });
-  }
   };
 
   return (
@@ -536,96 +657,98 @@ const CreateLicense = () => {
                       />
                       {errors.licenseNumber && <p className="text-xs text-red-600">{errors.licenseNumber}</p>}
                     </div>
-                    {/* CNPJ do Requerente */}
+
+                    {/* CPF/CNPJ do Requerente */}
                     <div className="space-y-2">
-                      <Label htmlFor="cnpj" className="text-sm font-medium text-gray-700">
-                        CNPJ do Requerente <span className="text-red-500">*</span>
+                      <Label htmlFor="cpfCnpj" className="text-sm font-medium text-gray-700">
+                        CPF/CNPJ do Requerente <span className="text-red-500">*</span>
                       </Label>
-                      <div className="flex gap-2">
+                      <div className="relative">
                         <Input
-                          id="cnpj"
-                          placeholder="99.999.999/9999-99"
-                          value={formData.cnpj}
-                          onChange={(e) => updateFormField('cnpj', e.target.value)}
-                          className="h-11 flex-1 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500"
+                          id="cpfCnpj"
+                          placeholder="000.000.000-00 ou 00.000.000/0000-00"
+                          value={formData.cpfCnpj}
+                          onChange={(e) => updateFormField('cpfCnpj', e.target.value)}
+                          className="h-11 border-gray-300 pr-9 focus:border-emerald-500 focus:ring-emerald-500"
                         />
-                        {errors.cnpj && <p className="text-xs text-red-600">{errors.cnpj}</p>}
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="icon"
-                          className="h-11 w-11 shrink-0"
-                          onClick={handleLookupRequester}
-                        >
-                          <Search className="h-4 w-4" />
-                        </Button>
+                        {isLookingUp && (
+                          <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-gray-400" />
+                        )}
+                        {!isLookingUp && requerenteFound && (
+                          <CheckCircle2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-emerald-600" />
+                        )}
                       </div>
+                      {errors.cpfCnpj && <p className="text-xs text-red-600">{errors.cpfCnpj}</p>}
                     </div>
 
                     {/* Nome do Requerente */}
                     <div className="space-y-2">
                       <Label htmlFor="requesterName" className="text-sm font-medium text-gray-700">
-                        Nome do Requerente <span className="text-red-500">*</span>
+                        Nome/Razão Social do Requerente <span className="text-red-500">*</span>
                       </Label>
                       <Input
                         id="requesterName"
-                        placeholder="xxxxxxxxxxxxxxxxxxx"
+                        placeholder="Nome ou Razão Social"
                         value={formData.requesterName}
                         onChange={(e) => updateFormField('requesterName', e.target.value)}
-                        className="h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500"
+                        readOnly={requerenteFound}
+                        className={`h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500 ${requerenteFound ? 'bg-gray-50' : ''}`}
                       />
+                      {requerenteFound && (
+                        <p className="text-xs text-emerald-700">Requerente já cadastrado</p>
+                      )}
                       {errors.requesterName && <p className="text-xs text-red-600">{errors.requesterName}</p>}
                     </div>
 
-                    {/* Ato */}
+                    {/* Ato (Tipo de Ato) — lookup */}
                     <div className="space-y-2">
                       <Label htmlFor="act" className="text-sm font-medium text-gray-700">
-                        Ato <span className="text-red-500">*</span>
+                        Tipo de Ato <span className="text-red-500">*</span>
                       </Label>
                       <Select value={formData.act} onValueChange={(value) => updateFormField('act', value)}>
                         <SelectTrigger className="h-11 border-gray-300">
                           <SelectValue placeholder="Selecione" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Outorga de Direito de Uso de Recursos Hídricos">Outorga de Direito de Uso de Recursos Hídricos</SelectItem>
+                          {tiposAto.map((t) => (
+                            <SelectItem key={t.codigo} value={t.nome}>{t.nome}</SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                       {errors.act && <p className="text-xs text-red-600">{errors.act}</p>}
                     </div>
 
-                    {/* Objeto de Ato */}
+                    {/* Objeto de Ato (texto livre) */}
                     <div className="space-y-2">
                       <Label htmlFor="actObject" className="text-sm font-medium text-gray-700">
                         Objeto de Ato <span className="text-red-500">*</span>
                       </Label>
-                      <Select value={formData.actObject} onValueChange={(value) => updateFormField('actObject', value)}>
-                        <SelectTrigger className="h-11 border-gray-300">
-                          <SelectValue placeholder="Selecione" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Recursos Hídricos">Recursos Hídricos</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <Input
+                        id="actObject"
+                        placeholder="Ex.: Recursos Hídricos"
+                        value={formData.actObject}
+                        onChange={(e) => updateFormField('actObject', e.target.value)}
+                        className="h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500"
+                      />
                       {errors.actObject && <p className="text-xs text-red-600">{errors.actObject}</p>}
                     </div>
 
-                    {/* Tipo de Ponto de Interferência */}
+                    {/* Tipo de Ponto de Interferência (texto livre) */}
                     <div className="space-y-2">
                       <Label htmlFor="interferenceType" className="text-sm font-medium text-gray-700">
-                        Tipo de Ponto de Interferência <span className="text-red-500">*</span>
+                        Tipo de Ponto de Interferência
                       </Label>
-                      <Select value={formData.interferenceType} onValueChange={(value) => updateFormField('interferenceType', value)}>
-                        <SelectTrigger className="h-11 border-gray-300">
-                          <SelectValue placeholder="Selecione" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Captação Subterrânea">Captação Subterrânea</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <Input
+                        id="interferenceType"
+                        placeholder="Ex.: Captação Subterrânea"
+                        value={formData.interferenceType}
+                        onChange={(e) => updateFormField('interferenceType', e.target.value)}
+                        className="h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500"
+                      />
                       {errors.interferenceType && <p className="text-xs text-red-600">{errors.interferenceType}</p>}
                     </div>
 
-                    {/* Finalidade de Uso */}
+                    {/* Finalidade de Uso — lookup */}
                     <div className="space-y-2">
                       <Label htmlFor="useFinality" className="text-sm font-medium text-gray-700">
                         Finalidade de Uso <span className="text-red-500">*</span>
@@ -635,24 +758,26 @@ const CreateLicense = () => {
                           <SelectValue placeholder="Selecione" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Outras Finalidades de Uso">Outras Finalidades de Uso</SelectItem>
+                          {finalidadesUso.map((f) => (
+                            <SelectItem key={f.codigo} value={f.nome}>{f.nome}</SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                       {errors.useFinality && <p className="text-xs text-red-600">{errors.useFinality}</p>}
                     </div>
 
-                    {/* Município */}
+                    {/* Município — lookup */}
                     <div className="space-y-2">
                       <Label htmlFor="municipality" className="text-sm font-medium text-gray-700">
-                        Município
+                        Município <span className="text-red-500">*</span>
                       </Label>
                       <Select value={formData.municipality} onValueChange={(value) => updateFormField('municipality', value)}>
                         <SelectTrigger className="h-11 border-gray-300">
                           <SelectValue placeholder="Selecione" />
                         </SelectTrigger>
                         <SelectContent>
-                          {MS_MUNICIPIOS.map((m) => (
-                            <SelectItem key={m} value={m}>{m}</SelectItem>
+                          {municipios.map((m) => (
+                            <SelectItem key={m.codigo} value={m.nome}>{m.nome}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -675,33 +800,37 @@ const CreateLicense = () => {
                       {errors.state && <p className="text-xs text-red-600">{errors.state}</p>}
                     </div>
 
-                    {/* Unidade de Planejamento e Gerenciamento */}
+                    {/* Unidade de Planejamento e Gerenciamento — lookup */}
                     <div className="space-y-2">
                       <Label htmlFor="planningUnit" className="text-sm font-medium text-gray-700">
-                        Unidade de Planejamento e Gerenciamento <span className="text-red-500">*</span>
+                        Unidade de Planejamento e Gerenciamento
                       </Label>
                       <Select value={formData.planningUnit} onValueChange={(value) => updateFormField('planningUnit', value)}>
                         <SelectTrigger className="h-11 border-gray-300">
                           <SelectValue placeholder="Selecione" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="PARDO-XXXXX">PARDO, xxxxx</SelectItem>
+                          {unidadesPlanejamento.map((u) => (
+                            <SelectItem key={u.codigo} value={u.nome}>{u.nome}</SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                       {errors.planningUnit && <p className="text-xs text-red-600">{errors.planningUnit}</p>}
                     </div>
 
-                    {/* Sistema Aquífero */}
+                    {/* Sistema Aquífero — lookup */}
                     <div className="space-y-2">
                       <Label htmlFor="aquiferSystem" className="text-sm font-medium text-gray-700">
-                        Sistema Aquífero <span className="text-red-500">*</span>
+                        Sistema Aquífero
                       </Label>
                       <Select value={formData.aquiferSystem} onValueChange={(value) => updateFormField('aquiferSystem', value)}>
                         <SelectTrigger className="h-11 border-gray-300">
                           <SelectValue placeholder="Selecione" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Serra Geral">Serra Geral</SelectItem>
+                          {sistemasAquiferos.map((s) => (
+                            <SelectItem key={s.codigo} value={s.nome}>{s.nome}</SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                       {errors.aquiferSystem && <p className="text-xs text-red-600">{errors.aquiferSystem}</p>}
@@ -710,11 +839,11 @@ const CreateLicense = () => {
                     {/* Latitude */}
                     <div className="space-y-2">
                       <Label htmlFor="latitude" className="text-sm font-medium text-gray-700">
-                        Latitude <span className="text-red-500">*</span>
+                        Latitude
                       </Label>
                       <Input
                         id="latitude"
-                        placeholder="-20°xx xx.xx"
+                        placeholder="-20° 00’ 00.00"
                         value={formData.latitude}
                         onChange={(e) => updateFormField('latitude', e.target.value)}
                         className="h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500"
@@ -725,11 +854,11 @@ const CreateLicense = () => {
                     {/* Longitude */}
                     <div className="space-y-2">
                       <Label htmlFor="longitude" className="text-sm font-medium text-gray-700">
-                        Longitude <span className="text-red-500">*</span>
+                        Longitude
                       </Label>
                       <Input
                         id="longitude"
-                        placeholder="-54°xx xx.xx"
+                        placeholder="-54° 00’ 00.00"
                         value={formData.longitude}
                         onChange={(e) => updateFormField('longitude', e.target.value)}
                         className="h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500"
@@ -740,11 +869,11 @@ const CreateLicense = () => {
                     {/* Volume Anual Captado */}
                     <div className="space-y-2">
                       <Label htmlFor="annualVolume" className="text-sm font-medium text-gray-700">
-                        Volume Anual Captado (m³) <span className="text-red-500">*</span>
+                        Volume Anual Captado (m³)
                       </Label>
                       <Input
                         id="annualVolume"
-                        placeholder="0"
+                        placeholder="0,00"
                         value={formData.annualVolume}
                         onChange={(e) => updateFormField('annualVolume', e.target.value)}
                         className="h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500"
@@ -772,8 +901,8 @@ const CreateLicense = () => {
                           onChange={(e) => updateFormField('validityEnd', e.target.value)}
                           className="h-11 flex-1 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500"
                         />
-                        {/* CA09: usuário pode editar a data final */}
                       </div>
+                      <p className="text-xs text-gray-500">Data fim calculada automaticamente como início + 10 anos. Você pode editá-la.</p>
                       {(errors.validityStart || errors.validityEnd) && (
                         <p className="text-xs text-red-600">{errors.validityStart || errors.validityEnd}</p>
                       )}
@@ -812,7 +941,6 @@ const CreateLicense = () => {
                       <p className="text-xs text-gray-500">Apenas arquivos PDF são aceitos</p>
                       {errors.pdfFile && <p className="text-xs text-red-600">{errors.pdfFile}</p>}
                     </div>
-
                   </div>
 
                   {/* Action Buttons */}

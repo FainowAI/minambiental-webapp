@@ -70,11 +70,11 @@ import { validateCEP, validateCPF, validatePhone, validateContractDates } from '
 import { getLicenseById } from '@/services/licenseService';
 import {
   createContract,
+  findTecnicoByCpf,
   getContractById,
   mapContractDataToFormValues,
   ContractFormValues,
   updateContract,
-  updateRequerenteContatoMedicao,
   type CreateContractPayload,
 } from '@/services/contractService';
 import { lookupCEP } from '@/services/cepService';
@@ -146,7 +146,10 @@ const ContractFormPage = ({ mode }: ContractFormPageProps) => {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [showTechnicianNotFoundDialog, setShowTechnicianNotFoundDialog] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
+  const [tecnicoId, setTecnicoId] = useState<string | null>(null);
+  const [isLookingUpTecnico, setIsLookingUpTecnico] = useState(false);
   const initialFormDataRef = useRef<ContractFormValues | null>(null);
+  const tecnicoLookupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Autosave hook
   const autosaveKey = `contract_draft_${licenseId}_${isEditMode ? contractId : 'new'}`;
@@ -315,7 +318,34 @@ const ContractFormPage = ({ mode }: ContractFormPageProps) => {
 
     setFormData((prev) => ({ ...prev, [field]: value }));
     setIsDirty(true);
+
+    // Debounced lookup do técnico ao digitar CPF (CA 07)
+    if (field === 'cpfTecnico') {
+      // Invalida vínculo anterior assim que CPF muda
+      setTecnicoId(null);
+      setFormData((prev) => ({ ...prev, nomeTecnico: '' }));
+
+      if (tecnicoLookupTimerRef.current) {
+        clearTimeout(tecnicoLookupTimerRef.current);
+      }
+
+      const cpfDigits = removeMask(value);
+      if (cpfDigits.length === 11) {
+        tecnicoLookupTimerRef.current = setTimeout(() => {
+          performTecnicoLookup(value, { silent: true });
+        }, 400);
+      }
+    }
   };
+
+  // Cleanup do timer de debounce ao desmontar
+  useEffect(() => {
+    return () => {
+      if (tecnicoLookupTimerRef.current) {
+        clearTimeout(tecnicoLookupTimerRef.current);
+      }
+    };
+  }, []);
 
   const handleLookupCEP = async (fieldPrefix: 'Contrato' | 'Obra') => {
     const cepField = fieldPrefix === 'Contrato' ? 'cepContrato' : 'cepObra';

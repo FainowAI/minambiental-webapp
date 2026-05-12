@@ -4,14 +4,9 @@ import { validateCPFOrCNPJ } from '@/utils/validators';
 export interface CreateUserData {
   nome: string;
   cpf: string;
-  perfil: 'Corpo Técnico' | 'Requerente' | 'Técnico';
-  // Campos opcionais para outros perfis
+  perfil: 'corpo_tecnico' | 'tecnico';
   email?: string;
   celular?: string;
-  // Campos específicos para perfil Requerente
-  contato_medicao_cpf?: string;
-  contato_medicao_email?: string;
-  contato_medicao_celular?: string;
 }
 
 export interface UserApprovalStatus {
@@ -22,6 +17,7 @@ export interface UserApprovalStatus {
 
 /**
  * Generate a secure password reset token
+ * @deprecated Password reset agora é gerenciado por Supabase Auth.
  */
 export async function generatePasswordToken(): Promise<string> {
   // Simple token generation for now
@@ -29,7 +25,9 @@ export async function generatePasswordToken(): Promise<string> {
 }
 
 /**
- * Create a new user with invite (Corpo Técnico function)
+ * Create a new user (funcionário) with invite (Corpo Técnico function).
+ * NOTE: Para criar/gerenciar Requerentes, use `requerenteService` — este serviço
+ * agora opera apenas sobre funcionários (Corpo Técnico e Técnico).
  */
 export async function createUserWithInvite(userData: CreateUserData): Promise<{
   success: boolean;
@@ -44,7 +42,7 @@ export async function createUserWithInvite(userData: CreateUserData): Promise<{
       throw new Error(`CPF/CNPJ inválido`);
     }
 
-    // Validar email apenas se fornecido (não obrigatório para Requerente)
+    // Validar email (obrigatório para funcionários)
     if (userData.email && !userData.email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
       throw new Error('Email inválido');
     }
@@ -58,9 +56,6 @@ export async function createUserWithInvite(userData: CreateUserData): Promise<{
       cpf: userData.cpf,
       celular: userData.celular,
       perfil: userData.perfil,
-      contato_medicao_cpf: userData.contato_medicao_cpf,
-      contato_medicao_email: userData.contato_medicao_email,
-      contato_medicao_celular: userData.contato_medicao_celular,
       baseUrl: window.location.origin,
     });
 
@@ -71,9 +66,6 @@ export async function createUserWithInvite(userData: CreateUserData): Promise<{
         cpf: userData.cpf,
         celular: userData.celular,
         perfil: userData.perfil,
-        contato_medicao_cpf: userData.contato_medicao_cpf,
-        contato_medicao_email: userData.contato_medicao_email,
-        contato_medicao_celular: userData.contato_medicao_celular,
         baseUrl: window.location.origin,
       },
     });
@@ -82,7 +74,7 @@ export async function createUserWithInvite(userData: CreateUserData): Promise<{
 
     if (error) {
       console.error('❌ Erro na Edge Function:', error);
-      
+
       // Tratamento de erros específicos
       if (error.message?.includes('403') || error.message?.includes('Sem permissão')) {
         throw new Error('Você não tem permissão para criar usuários.');
@@ -110,8 +102,8 @@ export async function createUserWithInvite(userData: CreateUserData): Promise<{
 export async function approveUser(userId: string): Promise<void> {
   const { error } = await supabase
     .from('usuarios')
-    .update({ 
-      status_aprovacao: 'Aprovado',
+    .update({
+      status_aprovacao: 'aprovado',
       updated_at: new Date().toISOString()
     })
     .eq('auth_user_id', userId);
@@ -127,8 +119,8 @@ export async function approveUser(userId: string): Promise<void> {
 export async function rejectUser(userId: string): Promise<void> {
   const { error } = await supabase
     .from('usuarios')
-    .update({ 
-      status_aprovacao: 'Rejeitado',
+    .update({
+      status_aprovacao: 'rejeitado',
       updated_at: new Date().toISOString()
     })
     .eq('auth_user_id', userId);
@@ -139,108 +131,67 @@ export async function rejectUser(userId: string): Promise<void> {
 }
 
 /**
- * Get user approval status
+ * Get user approval status — lê a role via JOIN em user_roles (role_v2).
+ * Tolera status capitalizado de dados legados por uma release.
  */
 export async function getUserApprovalStatus(authUserId: string): Promise<UserApprovalStatus> {
-  console.log('Checking approval status for user:', authUserId); // Debug
-  
   const { data, error } = await supabase
     .from('usuarios')
-    .select('perfil, status_aprovacao')
+    .select('id, status, status_aprovacao, user_roles(role_v2)')
     .eq('auth_user_id', authUserId)
-    .single();
-
-  if (error) {
-    console.error('Error fetching user approval status:', error); // Debug
-    throw new Error(`Erro ao buscar status do usuário: ${error.message}`);
-  }
-
-  console.log('User data from database:', data); // Debug
-
-  const isCorpoTecnico = data.perfil === 'Corpo Técnico';
-  const isApproved = isCorpoTecnico && data.status_aprovacao === 'Aprovado';
-
-  console.log('Approval status result:', { isCorpoTecnico, isApproved, status: data.status_aprovacao }); // Debug
-
-  return {
-    isApproved,
-    isCorpoTecnico,
-    status: data.status_aprovacao,
-  };
+    .maybeSingle();
+  if (error) throw new Error(`Erro ao buscar status do usuário: ${error.message}`);
+  if (!data) return { isApproved: false, isCorpoTecnico: false, status: undefined };
+  const roles = ((data as any).user_roles ?? []).map((r: any) => r.role_v2).filter(Boolean);
+  const isCorpoTecnico = roles.includes('corpo_tecnico');
+  const isApproved = isCorpoTecnico
+    && ((data as any).status_aprovacao === 'aprovado' || (data as any).status_aprovacao === 'Aprovado')
+    && ((data as any).status === 'ativo' || (data as any).status === 'Ativo');
+  return { isApproved, isCorpoTecnico, status: (data as any).status_aprovacao ?? undefined };
 }
 
 
 /**
- * Get all users for admin view
+ * Get all users for admin view — somente funcionários (corpo_tecnico/tecnico).
+ * Filtra defensivamente Requerentes legados que possam ter sobrado em `usuarios`.
  */
 export async function getAllUsers() {
   const { data, error } = await supabase
     .from('usuarios')
     .select(`
-      id,
-      auth_user_id,
-      nome,
-      email,
-      cpf,
-      celular,
-      perfil,
-      status,
-      status_aprovacao,
-      created_at,
-      updated_at
+      id, auth_user_id, nome, email, cpf, celular, status, status_aprovacao,
+      created_at, updated_at,
+      roles:user_roles(role_v2)
     `)
     .order('created_at', { ascending: false });
-
-  if (error) {
-    throw new Error(`Erro ao buscar usuários: ${error.message}`);
-  }
-
-  return data;
+  if (error) throw new Error(`Erro ao buscar usuários: ${error.message}`);
+  // Filter out any leftover Requerente rows (inativos depois de 012) — defensive
+  return (data ?? []).filter(u => (u as any).roles?.some((r: any) => r.role_v2 === 'corpo_tecnico' || r.role_v2 === 'tecnico'));
 }
 
 /**
  * Validate password reset token
+ * @deprecated Stub legacy — token_senha/token_expiracao removidos. Use Supabase Auth.
  */
-export async function validatePasswordToken(token: string, email: string) {
-  const { data, error } = await supabase
-    .from('usuarios')
-    .select('*')
-    .eq('email', email)
-    .eq('token_senha', token)
-    .gte('token_expiracao', new Date().toISOString())
-    .single();
-
-  if (error) {
-    throw new Error('Token inválido ou expirado');
-  }
-
-  return data;
+export async function validatePasswordToken(_token: string, _email: string) {
+  throw new Error('Password reset agora é gerenciado por Supabase Auth — não use este fluxo legacy.');
 }
 
 /**
  * Clear password reset token after use
+ * @deprecated Stub legacy — token_senha/token_expiracao removidos. Use Supabase Auth.
  */
-export async function clearPasswordToken(userId: string): Promise<void> {
-  const { error } = await supabase
-    .from('usuarios')
-    .update({
-      token_senha: null,
-      token_expiracao: null
-    })
-    .eq('auth_user_id', userId);
-
-  if (error) {
-    throw new Error(`Erro ao limpar token: ${error.message}`);
-  }
+export async function clearPasswordToken(_userId: string): Promise<void> {
+  throw new Error('Password reset agora é gerenciado por Supabase Auth — não use este fluxo legacy.');
 }
 
 /**
- * Get user by ID
+ * Get user by ID (inclui roles via JOIN em user_roles)
  */
 export async function getUserById(userId: string) {
   const { data, error } = await supabase
     .from('usuarios')
-    .select('*')
+    .select('*, user_roles(role_v2)')
     .eq('id', userId)
     .single();
 
@@ -259,11 +210,7 @@ export interface UpdateUserData {
   cpf: string;
   email?: string;
   celular?: string;
-  perfil: 'Corpo Técnico' | 'Requerente' | 'Técnico';
-  // Campos de contato para medição (Requerente)
-  contato_medicao_cpf?: string | null;
-  contato_medicao_email?: string | null;
-  contato_medicao_celular?: string | null;
+  perfil: 'corpo_tecnico' | 'tecnico';
 }
 
 export async function updateUser(userId: string, userData: UpdateUserData): Promise<void> {
@@ -279,7 +226,7 @@ export async function updateUser(userId: string, userData: UpdateUserData): Prom
     const cleanedCelular = userData.celular?.replace(/\D/g, '');
 
     // Verificar se CPF já existe (exceto para o próprio usuário)
-    const { data: existingUser, error: checkError } = await supabase
+    const { data: existingUser } = await supabase
       .from('usuarios')
       .select('id')
       .eq('cpf', cleanedCpf)
@@ -290,24 +237,14 @@ export async function updateUser(userId: string, userData: UpdateUserData): Prom
       throw new Error('CPF já cadastrado no sistema');
     }
 
-    // Preparar dados para atualização
+    // Preparar dados para atualização (sem `perfil` — agora vive em user_roles.role_v2)
     const updateData: any = {
       nome: userData.nome,
       cpf: cleanedCpf,
-      perfil: userData.perfil,
+      email: userData.email,
+      celular: cleanedCelular,
       updated_at: new Date().toISOString()
     };
-
-    // Adicionar email e celular apenas se o perfil não for Requerente
-    if (userData.perfil !== 'Requerente') {
-      updateData.email = userData.email;
-      updateData.celular = cleanedCelular;
-    } else {
-      // Adicionar campos de contato para Requerente
-      updateData.contato_medicao_cpf = userData.contato_medicao_cpf || null;
-      updateData.contato_medicao_email = userData.contato_medicao_email || null;
-      updateData.contato_medicao_celular = userData.contato_medicao_celular || null;
-    }
 
     const { error } = await supabase
       .from('usuarios')
@@ -324,16 +261,19 @@ export async function updateUser(userId: string, userData: UpdateUserData): Prom
 }
 
 /**
- * Check if a Requerente has active contracts
- * contratos has no requerente_id — join through licencas.requerente_id
+ * Check if a Requerente has active contracts.
+ * contratos has no requerente_id — join through licencas.requerente_id.
+ *
+ * NOTE: este check é sobre um Requerente (não funcionário). Será movido para
+ * `requerenteService` em um cleanup futuro.
  */
-export async function hasActiveContracts(userId: string): Promise<boolean> {
+export async function hasActiveContracts(requerenteId: string): Promise<boolean> {
   try {
     // First, get license IDs for this requerente
     const { data: licencas, error: licencasError } = await supabase
       .from('licencas')
       .select('id')
-      .eq('requerente_id', userId);
+      .eq('requerente_id', requerenteId);
 
     if (licencasError) {
       console.error('Error fetching licencas for requerente:', licencasError);
@@ -366,22 +306,15 @@ export async function hasActiveContracts(userId: string): Promise<boolean> {
 }
 
 /**
- * Toggle user status (activate/deactivate)
+ * Toggle user status (activate/deactivate).
+ * `status` e `status_aprovacao` são conceitos independentes agora; só togglamos `status`.
  */
 export async function toggleUserStatus(userId: string, currentStatus: string): Promise<void> {
-  const newStatus = currentStatus === 'Ativo' ? 'Inativo' : 'Ativo';
-  const newStatusAprovacao = currentStatus === 'Ativo' ? 'Rejeitado' : 'Aprovado';
-
+  const normalized = (currentStatus ?? '').toLowerCase();
+  const newStatus = normalized === 'ativo' ? 'inativo' : 'ativo';
   const { error } = await supabase
     .from('usuarios')
-    .update({
-      status: newStatus,
-      status_aprovacao: newStatusAprovacao,
-      updated_at: new Date().toISOString()
-    })
+    .update({ status: newStatus, updated_at: new Date().toISOString() })
     .eq('id', userId);
-
-  if (error) {
-    throw new Error(`Erro ao atualizar status do usuário: ${error.message}`);
-  }
+  if (error) throw new Error(`Erro ao atualizar status do usuário: ${error.message}`);
 }
