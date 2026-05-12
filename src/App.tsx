@@ -10,7 +10,6 @@ import PasswordResetConfirmation from "./pages/PasswordResetConfirmation";
 import ResetPassword from "./pages/ResetPassword";
 import SetPassword from "./pages/SetPassword";
 import PendingApproval from "./pages/PendingApproval";
-import Dashboard from "./pages/Dashboard";
 import Home from "./pages/Home";
 import Users from "./pages/Users";
 import CreateUser from "./pages/CreateUser";
