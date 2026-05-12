@@ -22,6 +22,7 @@ import EditLicense from "./pages/EditLicense";
 import ViewLicense from "./pages/ViewLicense";
 import CreateContract from "./pages/CreateContract";
 import EditContract from "./pages/EditContract";
+import ViewContract from "./pages/ViewContract";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -77,6 +78,11 @@ const App = () => (
           <Route path="/edit-contract/:licenseId/:contractId" element={
             <ProtectedRoute>
               <EditContract />
+            </ProtectedRoute>
+          } />
+          <Route path="/view-contract/:licenseId/:contractId" element={
+            <ProtectedRoute>
+              <ViewContract />
             </ProtectedRoute>
           } />
           <Route path="/users" element={

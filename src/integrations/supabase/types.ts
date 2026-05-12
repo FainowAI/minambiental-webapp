@@ -92,6 +92,242 @@ export type Database = {
           },
         ]
       }
+      contrato_analises_fq: {
+        Row: {
+          codigo_amostra: string | null
+          condicoes_tempo: string | null
+          contrato_id: string
+          created_at: string | null
+          created_by: string | null
+          data_coleta: string
+          data_entrada_laboratorio: string | null
+          hora_coleta: string | null
+          id: string
+          ind_profissional: string | null
+          laboratorio: string | null
+          observacoes: string | null
+          parametros_extras: Json | null
+          responsavel_coleta: string | null
+          resultado_cor: number | null
+          resultado_ph: number | null
+          resultado_temperatura_agua: number | null
+          resultado_turbidez: number | null
+          temperatura_ambiente: number | null
+          temperatura_amostra: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          codigo_amostra?: string | null
+          condicoes_tempo?: string | null
+          contrato_id: string
+          created_at?: string | null
+          created_by?: string | null
+          data_coleta: string
+          data_entrada_laboratorio?: string | null
+          hora_coleta?: string | null
+          id?: string
+          ind_profissional?: string | null
+          laboratorio?: string | null
+          observacoes?: string | null
+          parametros_extras?: Json | null
+          responsavel_coleta?: string | null
+          resultado_cor?: number | null
+          resultado_ph?: number | null
+          resultado_temperatura_agua?: number | null
+          resultado_turbidez?: number | null
+          temperatura_ambiente?: number | null
+          temperatura_amostra?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          codigo_amostra?: string | null
+          condicoes_tempo?: string | null
+          contrato_id?: string
+          created_at?: string | null
+          created_by?: string | null
+          data_coleta?: string
+          data_entrada_laboratorio?: string | null
+          hora_coleta?: string | null
+          id?: string
+          ind_profissional?: string | null
+          laboratorio?: string | null
+          observacoes?: string | null
+          parametros_extras?: Json | null
+          responsavel_coleta?: string | null
+          resultado_cor?: number | null
+          resultado_ph?: number | null
+          resultado_temperatura_agua?: number | null
+          resultado_turbidez?: number | null
+          temperatura_ambiente?: number | null
+          temperatura_amostra?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contrato_analises_fq_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "contratos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contrato_monitoramento_imagens: {
+        Row: {
+          arquivo_url: string
+          bucket_path: string
+          content_type: string | null
+          created_at: string | null
+          created_by: string | null
+          id: string
+          monitoramento_id: string
+          tamanho_bytes: number | null
+        }
+        Insert: {
+          arquivo_url: string
+          bucket_path: string
+          content_type?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          monitoramento_id: string
+          tamanho_bytes?: number | null
+        }
+        Update: {
+          arquivo_url?: string
+          bucket_path?: string
+          content_type?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          monitoramento_id?: string
+          tamanho_bytes?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contrato_monitoramento_imagens_monitoramento_id_fkey"
+            columns: ["monitoramento_id"]
+            isOneToOne: false
+            referencedRelation: "contrato_monitoramentos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contrato_monitoramentos: {
+        Row: {
+          consumo: number | null
+          contrato_id: string
+          created_at: string | null
+          created_by: string | null
+          data_leitura: string
+          hora_apurada: number
+          hora_declarada: number | null
+          id: string
+          leitura_anterior: number | null
+          leitura_apurada: number
+          leitura_declarada: number | null
+          observacoes: string | null
+          referencia_ano: number
+          referencia_mes: number
+          tipo: Database["public"]["Enums"]["tipo_medidor"]
+          updated_at: string | null
+        }
+        Insert: {
+          consumo?: number | null
+          contrato_id: string
+          created_at?: string | null
+          created_by?: string | null
+          data_leitura: string
+          hora_apurada: number
+          hora_declarada?: number | null
+          id?: string
+          leitura_anterior?: number | null
+          leitura_apurada: number
+          leitura_declarada?: number | null
+          observacoes?: string | null
+          referencia_ano: number
+          referencia_mes: number
+          tipo: Database["public"]["Enums"]["tipo_medidor"]
+          updated_at?: string | null
+        }
+        Update: {
+          consumo?: number | null
+          contrato_id?: string
+          created_at?: string | null
+          created_by?: string | null
+          data_leitura?: string
+          hora_apurada?: number
+          hora_declarada?: number | null
+          id?: string
+          leitura_anterior?: number | null
+          leitura_apurada?: number
+          leitura_declarada?: number | null
+          observacoes?: string | null
+          referencia_ano?: number
+          referencia_mes?: number
+          tipo?: Database["public"]["Enums"]["tipo_medidor"]
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contrato_monitoramentos_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "contratos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contrato_nd_ne: {
+        Row: {
+          contrato_id: string
+          created_at: string | null
+          created_by: string | null
+          data_medicao: string | null
+          id: string
+          nivel_dinamico: number
+          nivel_estatico: number
+          observacoes: string | null
+          periodo: Database["public"]["Enums"]["periodo_medicao"]
+          responsavel: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          contrato_id: string
+          created_at?: string | null
+          created_by?: string | null
+          data_medicao?: string | null
+          id?: string
+          nivel_dinamico: number
+          nivel_estatico: number
+          observacoes?: string | null
+          periodo: Database["public"]["Enums"]["periodo_medicao"]
+          responsavel?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          contrato_id?: string
+          created_at?: string | null
+          created_by?: string | null
+          data_medicao?: string | null
+          id?: string
+          nivel_dinamico?: number
+          nivel_estatico?: number
+          observacoes?: string | null
+          periodo?: Database["public"]["Enums"]["periodo_medicao"]
+          responsavel?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contrato_nd_ne_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "contratos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contratos: {
         Row: {
           acao_institucional: string | null
@@ -117,14 +353,18 @@ export type Database = {
           nome_tecnico: string | null
           numero: string | null
           numero_obra: string | null
+          observacao: string | null
           pais: string | null
           pais_obra: string | null
           periodo_medicao_fim: string | null
           periodo_medicao_inicio: string | null
           previsao_termino: string | null
+          registro: string | null
+          registro_empresa_contratada: string | null
           rnp: string | null
           rua: string | null
           rua_obra: string | null
+          status: string | null
           telefone_contato: string | null
           tipo_contratante: string | null
           titulo_profissional: string | null
@@ -156,14 +396,18 @@ export type Database = {
           nome_tecnico?: string | null
           numero?: string | null
           numero_obra?: string | null
+          observacao?: string | null
           pais?: string | null
           pais_obra?: string | null
           periodo_medicao_fim?: string | null
           periodo_medicao_inicio?: string | null
           previsao_termino?: string | null
+          registro?: string | null
+          registro_empresa_contratada?: string | null
           rnp?: string | null
           rua?: string | null
           rua_obra?: string | null
+          status?: string | null
           telefone_contato?: string | null
           tipo_contratante?: string | null
           titulo_profissional?: string | null
@@ -195,14 +439,18 @@ export type Database = {
           nome_tecnico?: string | null
           numero?: string | null
           numero_obra?: string | null
+          observacao?: string | null
           pais?: string | null
           pais_obra?: string | null
           periodo_medicao_fim?: string | null
           periodo_medicao_inicio?: string | null
           previsao_termino?: string | null
+          registro?: string | null
+          registro_empresa_contratada?: string | null
           rnp?: string | null
           rua?: string | null
           rua_obra?: string | null
+          status?: string | null
           telefone_contato?: string | null
           tipo_contratante?: string | null
           titulo_profissional?: string | null
@@ -721,7 +969,9 @@ export type Database = {
     Enums: {
       app_role: "admin" | "user" | "gestor"
       invitation_status: "pending" | "accepted" | "expired"
+      periodo_medicao: "seca" | "chuva"
       prioridade_licenca: "URGENTE" | "ALTA" | "MÉDIA" | "BAIXA"
+      tipo_medidor: "hidrometro" | "horimetro"
       user_profile: "corpo_tecnico" | "tecnico" | "requerente"
     }
     CompositeTypes: {
@@ -852,7 +1102,9 @@ export const Constants = {
     Enums: {
       app_role: ["admin", "user", "gestor"],
       invitation_status: ["pending", "accepted", "expired"],
+      periodo_medicao: ["seca", "chuva"],
       prioridade_licenca: ["URGENTE", "ALTA", "MÉDIA", "BAIXA"],
+      tipo_medidor: ["hidrometro", "horimetro"],
       user_profile: ["corpo_tecnico", "tecnico", "requerente"],
     },
   },
