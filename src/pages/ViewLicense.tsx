@@ -67,7 +67,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { useQuery } from '@tanstack/react-query';
 import { maskCNPJ, maskDecimalTwoPlaces, decimalToDMS } from '@/utils/masks';
-import { getLicenseById } from '@/services/licenseService';
+import { getLicenseById, getLicensePdfSignedUrl } from '@/services/licenseService';
 import { getContractsByLicenseId } from '@/services/contractService';
 import { useToast } from '@/hooks/use-toast';
 import { generateMonitoringReport } from '@/services/reportService';
@@ -259,9 +259,18 @@ const ViewLicense = () => {
     navigate(`/edit-license/${id}`);
   };
 
-  const handleViewPDF = () => {
+  const handleViewPDF = async () => {
     if (licenseData?.pdf_licenca) {
-      window.open(licenseData.pdf_licenca, '_blank');
+      try {
+        const url = await getLicensePdfSignedUrl(licenseData.pdf_licenca);
+        window.open(url, '_blank');
+      } catch {
+        toast({
+          title: 'Erro ao abrir PDF',
+          description: 'Não foi possível gerar o link de acesso ao PDF.',
+          variant: 'destructive',
+        });
+      }
     } else {
       toast({
         title: 'PDF não disponível',

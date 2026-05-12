@@ -1,5 +1,14 @@
 import { supabase } from '@/integrations/supabase/client';
 
+// TODO Sprint 0b: vai virar enum no banco
+export type TipoNotificacao =
+  | 'Vencimento'
+  | 'Monitoramento'
+  | 'Analise'
+  | 'Sistema'
+  | 'nova_edicao_solicitada'
+  | 'apuracao_disponivel';
+
 export interface Notification {
   id: string;
   usuario_id: string;

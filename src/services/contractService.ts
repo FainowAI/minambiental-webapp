@@ -210,7 +210,7 @@ function mapPayloadToDatabaseRecord(
     cepContrato: 'cep_contrato',
     ruaContrato: 'rua',
     bairroContrato: 'bairro',
-    numeroContrato: 'numero',
+    numeroContrato: 'numero_endereco',
     cidadeContrato: 'cidade',
     estadoContrato: 'estado',
     paisContrato: 'pais',

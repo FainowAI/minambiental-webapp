@@ -137,7 +137,7 @@ export const checkCorpoTecnicoApuracao = async (
       return null;
     }
 
-    // Buscar monitoramentos do mês atual criados pelo corpo técnico com status finalizado
+    // Buscar monitoramentos do mês atual criados pelo corpo técnico com status aprovado
     const { data: monitoramento, error } = await supabase
       .from('monitoramentos')
       .select(`
@@ -152,7 +152,7 @@ export const checkCorpoTecnicoApuracao = async (
       .eq('licenca_id', licenseId)
       .eq('mes', currentMonth)
       .eq('ano', currentYear)
-      .eq('status', 'finalizado')
+      .eq('status', 'Aprovado') // FIXME Sprint 0b: enum em lowercase
       .in('usuario_id', corpoTecnicoAuthIds)
       .order('created_at', { ascending: false })
       .limit(1)
@@ -213,12 +213,12 @@ export const getMonitoringHistory = async (
   licenseId: string
 ): Promise<MonthlyReading[] | null> => {
   try {
-    // Buscar a primeira apuração (monitoramento mais antigo com status finalizado)
+    // Buscar a primeira apuração (monitoramento mais antigo com status aprovado)
     const { data: firstApuracao, error: firstError } = await supabase
       .from('monitoramentos')
       .select('mes, ano, created_at')
       .eq('licenca_id', licenseId)
-      .eq('status', 'finalizado')
+      .eq('status', 'Aprovado') // FIXME Sprint 0b: enum em lowercase
       .order('ano', { ascending: true })
       .order('mes', { ascending: true })
       .limit(1)
@@ -255,12 +255,12 @@ export const getMonitoringHistory = async (
       });
     }
 
-    // Buscar todos os monitoramentos finalizados desses 12 meses
+    // Buscar todos os monitoramentos aprovados desses 12 meses
     const { data: monitoramentos, error: monitoramentosError } = await supabase
       .from('monitoramentos')
       .select('mes, ano, hidrometro_leitura_atual, horimetro_leitura_atual, nd_metros, ne_metros')
       .eq('licenca_id', licenseId)
-      .eq('status', 'finalizado')
+      .eq('status', 'Aprovado') // FIXME Sprint 0b: enum em lowercase
       .in('mes', months.map(m => m.mes))
       .in('ano', months.map(m => m.ano));
 

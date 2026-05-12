@@ -133,13 +133,9 @@ serve(async (req) => {
       authData = result.data;
       createError = result.error;
     } else if (perfil === 'Requerente') {
-      // Para perfil Requerente sem email, não criar usuário Auth
-      // Criar um ID temporário para referência
-      authData = {
-        user: {
-          id: `temp_${cpf}_${Date.now()}`
-        }
-      };
+      // Requerente sem email: auth_user_id fica null (FK permite NULL)
+      // Sprint 0b: mover criação de Requerente para nova edge function
+      authData = { user: { id: null } };
     } else {
       // Outros perfis sem email - erro
       return new Response(

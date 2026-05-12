@@ -325,23 +325,40 @@ export async function updateUser(userId: string, userData: UpdateUserData): Prom
 
 /**
  * Check if a Requerente has active contracts
+ * contratos has no requerente_id — join through licencas.requerente_id
  */
 export async function hasActiveContracts(userId: string): Promise<boolean> {
   try {
-    // @ts-ignore - Avoid deep type inference issue
+    // First, get license IDs for this requerente
+    const { data: licencas, error: licencasError } = await supabase
+      .from('licencas')
+      .select('id')
+      .eq('requerente_id', userId);
+
+    if (licencasError) {
+      console.error('Error fetching licencas for requerente:', licencasError);
+      return true;
+    }
+
+    if (!licencas || licencas.length === 0) {
+      return false;
+    }
+
+    const licencaIds = licencas.map((l) => l.id);
+
     const { data, error } = await supabase
       .from('contratos')
       .select('id')
-      .eq('requerente_id', userId)
+      .in('licenca_id', licencaIds)
       .eq('status', 'Ativo')
       .limit(1);
-    
+
     if (error) {
       console.error('Error checking active contracts:', error);
       return true;
     }
-    
-    return data && data.length > 0;
+
+    return data !== null && data.length > 0;
   } catch (error) {
     console.error('Error in hasActiveContracts:', error);
     return true;

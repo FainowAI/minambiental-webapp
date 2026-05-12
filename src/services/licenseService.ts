@@ -195,17 +195,34 @@ async function uploadPdf(file: File, requerenteId: string, numeroLicenca: string
       contentType: 'application/pdf',
       upsert: false,
     });
-    
+
   if (uploadError) {
     console.error('Upload error:', uploadError);
     throw new Error(`Erro ao fazer upload do PDF: ${uploadError.message}`);
   }
-  
-  const { data: publicUrlData } = supabase.storage
-    .from(bucket)
-    .getPublicUrl(filePath);
-    
-  return publicUrlData.publicUrl;
+
+  return filePath;
+}
+
+// Bucket 'licencas' é privado — gerar URL assinada (TTL 15min)
+// pathOrUrl pode ser path relativo (novos registros) ou URL pública antiga
+export async function getLicensePdfSignedUrl(pathOrUrl: string): Promise<string> {
+  let storagePath = pathOrUrl;
+
+  const publicPattern = '/storage/v1/object/public/licencas/';
+  const signedPattern = '/storage/v1/object/sign/licencas/';
+
+  if (pathOrUrl.includes(publicPattern)) {
+    storagePath = pathOrUrl.split(publicPattern)[1];
+  } else if (pathOrUrl.includes(signedPattern)) {
+    storagePath = pathOrUrl.split(signedPattern)[1].split('?')[0];
+  }
+
+  const { data, error } = await supabase.storage
+    .from('licencas')
+    .createSignedUrl(storagePath, 900);
+  if (error) throw error;
+  return data.signedUrl;
 }
 
 export const createLicense = async (payload: CreateLicensePayload) => {
