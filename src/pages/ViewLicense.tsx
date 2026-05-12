@@ -12,6 +12,8 @@ import {
   ExternalLink,
   Loader2,
   Plus,
+  Eye,
+  Pencil,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -918,15 +920,26 @@ const ViewLicense = () => {
                                   </Badge>
                                 </TableCell>
                                 <TableCell className="text-right">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="border-emerald-600 text-emerald-600 hover:bg-emerald-50"
-                                    onClick={() => navigate(`/edit-contract/${id}/${contract.id}`)}
-                                  >
-                                    <Edit className="mr-2 h-4 w-4" />
-                                    Editar
-                                  </Button>
+                                  <div className="flex items-center justify-end gap-2">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="border-blue-600 text-blue-600 hover:bg-blue-50"
+                                      onClick={() => navigate(`/view-contract/${id}/${contract.id}`)}
+                                    >
+                                      <Eye className="mr-2 h-4 w-4" />
+                                      Visualizar
+                                    </Button>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="border-emerald-600 text-emerald-600 hover:bg-emerald-50"
+                                      onClick={() => navigate(`/edit-contract/${id}/${contract.id}`)}
+                                      title="Editar contrato"
+                                    >
+                                      <Pencil className="h-4 w-4" />
+                                    </Button>
+                                  </div>
                                 </TableCell>
                               </TableRow>
                             ))}
