@@ -1,3 +1,12 @@
+/**
+ * @deprecated Sprint 0b — Source of truth migrated to the DB table `ref_parametros_analise`.
+ *
+ * Use `getParametrosAnalise()` from `src/services/analysisService.ts` instead. This file remains
+ * only as an offline fallback for cases where the network/DB is unavailable.
+ *
+ * Do NOT add new parameters here. Add them in migration 013 (ref_parametros_analise INSERT) or
+ * via Supabase Studio. This file will be removed in a future cleanup (prompt_03).
+ */
 // Tipos para os parâmetros de análise
 export interface AnalysisParameter {
   key: string;

@@ -2,9 +2,16 @@
   "permissions": {
     "allow": [
       "mcp__figma-dev-mode-mcp-server__get_design_context",
-      "mcp__figma-dev-mode-mcp-server__get_screenshot"
+      "mcp__figma-dev-mode-mcp-server__get_screenshot",
+      "Bash(Get-Content *)",
+      "PowerShell(Get-ChildItem *)",
+      "Bash(git remote *)"
     ],
     "deny": [],
     "ask": []
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "supabase"
+  ]
 }

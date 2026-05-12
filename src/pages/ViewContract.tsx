@@ -92,6 +92,7 @@ const ViewContract = () => {
   const [isLoadingAnalyses, setIsLoadingAnalyses] = useState(false);
   const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
   const [selectedAnalysisId, setSelectedAnalysisId] = useState<string | undefined>(undefined);
+  const [isViewMode, setIsViewMode] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [analysisToDelete, setAnalysisToDelete] = useState<string | null>(null);
 
@@ -184,13 +185,15 @@ const ViewContract = () => {
     navigate(`/edit-contract/${licenseId}/${contractId}`);
   };
 
-  const handleOpenAnalysisModal = (analysisId?: string) => {
+  const handleOpenAnalysisModal = (analysisId?: string, viewMode = false) => {
     setSelectedAnalysisId(analysisId);
+    setIsViewMode(viewMode);
     setIsAnalysisModalOpen(true);
   };
 
   const handleCloseAnalysisModal = () => {
     setSelectedAnalysisId(undefined);
+    setIsViewMode(false);
     setIsAnalysisModalOpen(false);
   };
 
@@ -976,8 +979,18 @@ const ViewContract = () => {
                                 <Button
                                   size="sm"
                                   variant="ghost"
-                                  onClick={() => handleOpenAnalysisModal(analysis.id)}
+                                  onClick={() => handleOpenAnalysisModal(analysis.id, true)}
+                                  className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                  title="Visualizar análise"
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => handleOpenAnalysisModal(analysis.id, false)}
                                   className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                                  title="Editar análise"
                                 >
                                   <Edit className="h-4 w-4" />
                                 </Button>
@@ -986,6 +999,7 @@ const ViewContract = () => {
                                   variant="ghost"
                                   onClick={() => handleDeleteAnalysis(analysis.id)}
                                   className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  title="Excluir análise"
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
@@ -1047,6 +1061,7 @@ const ViewContract = () => {
               licenseId={licenseId}
               analysisId={selectedAnalysisId}
               onSuccess={handleAnalysisSuccess}
+              readOnly={isViewMode}
             />
           )}
 

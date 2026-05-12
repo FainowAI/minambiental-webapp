@@ -1,7 +1,7 @@
 import { ReactNode } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { Loader2, AlertCircle, CheckCircle } from 'lucide-react';
+import { Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import PendingApproval from '@/pages/PendingApproval';
 
@@ -10,10 +10,16 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
-  const { user, isApproved, isCorpoTecnico, isLoading } = useAuth();
+  const { user, isCorpoTecnico, isApproved, isLoading } = useAuth();
   const navigate = useNavigate();
 
-  // Show loading while checking auth status
+  // A session exists if Supabase Auth has a user, even before the `usuarios`
+  // row has been loaded — that lets us keep the user on the protected route
+  // tree (showing a fallback) while approval checks run, instead of bouncing
+  // them back to /.
+  const hasSession = Boolean(user);
+
+  // 1. Loading state
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -25,12 +31,12 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
     );
   }
 
-  // Redirect to login if not authenticated
-  if (!user) {
+  // 2. No session → redirect to login
+  if (!hasSession) {
     return <Navigate to="/" replace />;
   }
 
-  // Block access if user is not Corpo Técnico
+  // 3. Not Corpo Técnico → access denied (Técnicos never log in)
   if (!isCorpoTecnico) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -42,7 +48,7 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
           <p className="text-gray-600 mb-6">
             Apenas usuários do <strong>Corpo Técnico</strong> podem acessar esta plataforma.
           </p>
-          <Button 
+          <Button
             onClick={() => navigate('/')}
             variant="outline"
             className="border-gray-300 text-gray-700 hover:bg-gray-50"
@@ -54,14 +60,13 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
     );
   }
 
-  // Check if corpo tecnico is approved
+  // 4. Corpo Técnico but not yet approved → pending approval page
   if (!isApproved) {
     return <PendingApproval />;
   }
 
-  // User is authenticated and approved (or not corpo tecnico), render children
+  // 5. Authenticated, Corpo Técnico, approved → render protected content
   return <>{children}</>;
 };
 
 export default ProtectedRoute;
-
