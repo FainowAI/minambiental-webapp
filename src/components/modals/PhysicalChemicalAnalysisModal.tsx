@@ -48,8 +48,9 @@ interface PhysicalChemicalAnalysisModalProps {
   onClose: () => void;
   contractId: string;
   licenseId: string;
-  analysisId?: string; // Se fornecido, modo edição
+  analysisId?: string; // Se fornecido, modo edição ou visualização
   onSuccess?: () => void;
+  readOnly?: boolean; // Modo somente leitura
 }
 
 const PhysicalChemicalAnalysisModal = ({
@@ -59,6 +60,7 @@ const PhysicalChemicalAnalysisModal = ({
   licenseId,
   analysisId,
   onSuccess,
+  readOnly = false,
 }: PhysicalChemicalAnalysisModalProps) => {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
@@ -243,14 +245,16 @@ const PhysicalChemicalAnalysisModal = ({
           <Label className="text-sm font-medium text-gray-700">{param.nome}</Label>
         </div>
         <div className="space-y-2">
-          <Label className="text-xs text-gray-500">Valor a Informar</Label>
+          <Label className="text-xs text-gray-500">Valor Informado</Label>
           <Input
             type="number"
             step="0.01"
             value={formData.parametros[param.key] ?? ''}
             onChange={(e) => handleParameterChange(param.key, e.target.value)}
             placeholder="Informe o valor"
-            className="h-10"
+            className={readOnly ? "h-10 bg-gray-50 text-gray-700 cursor-default" : "h-10"}
+            disabled={readOnly}
+            readOnly={readOnly}
           />
         </div>
         <div className="space-y-2">
@@ -295,10 +299,10 @@ const PhysicalChemicalAnalysisModal = ({
             </div>
             <div>
               <DialogTitle className="text-2xl">
-                {analysisId ? 'Editar' : 'Cadastrar'} Análise Físico-Química e Bacteriológica
+                {readOnly ? 'Visualizar' : analysisId ? 'Editar' : 'Cadastrar'} Análise Físico-Química e Bacteriológica
               </DialogTitle>
               <DialogDescription>
-                {analysisId ? 'Atualize' : 'Registre'} os dados da análise de qualidade da água
+                {readOnly ? 'Consulte' : analysisId ? 'Atualize' : 'Registre'} os dados da análise de qualidade da água
               </DialogDescription>
             </div>
           </div>
@@ -323,9 +327,11 @@ const PhysicalChemicalAnalysisModal = ({
                   value={formData.responsavel_coleta}
                   onChange={(e) => handleInputChange('responsavel_coleta', e.target.value)}
                   placeholder="Nome do responsável"
-                  className={`h-11 ${errors.responsavel_coleta ? 'border-red-500' : ''}`}
+                  className={readOnly ? "h-11 bg-gray-50 text-gray-700 cursor-default" : `h-11 ${errors.responsavel_coleta ? 'border-red-500' : ''}`}
+                  disabled={readOnly}
+                  readOnly={readOnly}
                 />
-                {errors.responsavel_coleta && (
+                {!readOnly && errors.responsavel_coleta && (
                   <p className="text-xs text-red-500">{errors.responsavel_coleta}</p>
                 )}
               </div>
@@ -340,9 +346,11 @@ const PhysicalChemicalAnalysisModal = ({
                   value={formData.identificacao_profissional}
                   onChange={(e) => handleInputChange('identificacao_profissional', e.target.value)}
                   placeholder="Registro/identificação"
-                  className={`h-11 ${errors.identificacao_profissional ? 'border-red-500' : ''}`}
+                  className={readOnly ? "h-11 bg-gray-50 text-gray-700 cursor-default" : `h-11 ${errors.identificacao_profissional ? 'border-red-500' : ''}`}
+                  disabled={readOnly}
+                  readOnly={readOnly}
                 />
-                {errors.identificacao_profissional && (
+                {!readOnly && errors.identificacao_profissional && (
                   <p className="text-xs text-red-500">{errors.identificacao_profissional}</p>
                 )}
               </div>
@@ -359,9 +367,11 @@ const PhysicalChemicalAnalysisModal = ({
                   value={formData.laboratorio}
                   onChange={(e) => handleInputChange('laboratorio', e.target.value)}
                   placeholder="Nome do laboratório"
-                  className={`h-11 ${errors.laboratorio ? 'border-red-500' : ''}`}
+                  className={readOnly ? "h-11 bg-gray-50 text-gray-700 cursor-default" : `h-11 ${errors.laboratorio ? 'border-red-500' : ''}`}
+                  disabled={readOnly}
+                  readOnly={readOnly}
                 />
-                {errors.laboratorio && (
+                {!readOnly && errors.laboratorio && (
                   <p className="text-xs text-red-500">{errors.laboratorio}</p>
                 )}
               </div>
@@ -375,9 +385,11 @@ const PhysicalChemicalAnalysisModal = ({
                   type="date"
                   value={formData.data_entrada_laboratorio}
                   onChange={(e) => handleInputChange('data_entrada_laboratorio', e.target.value)}
-                  className={`h-11 ${errors.data_entrada_laboratorio ? 'border-red-500' : ''}`}
+                  className={readOnly ? "h-11 bg-gray-50 text-gray-700 cursor-default" : `h-11 ${errors.data_entrada_laboratorio ? 'border-red-500' : ''}`}
+                  disabled={readOnly}
+                  readOnly={readOnly}
                 />
-                {errors.data_entrada_laboratorio && (
+                {!readOnly && errors.data_entrada_laboratorio && (
                   <p className="text-xs text-red-500">{errors.data_entrada_laboratorio}</p>
                 )}
               </div>
@@ -391,9 +403,11 @@ const PhysicalChemicalAnalysisModal = ({
                   type="date"
                   value={formData.data_coleta}
                   onChange={(e) => handleInputChange('data_coleta', e.target.value)}
-                  className={`h-11 ${errors.data_coleta ? 'border-red-500' : ''}`}
+                  className={readOnly ? "h-11 bg-gray-50 text-gray-700 cursor-default" : `h-11 ${errors.data_coleta ? 'border-red-500' : ''}`}
+                  disabled={readOnly}
+                  readOnly={readOnly}
                 />
-                {errors.data_coleta && (
+                {!readOnly && errors.data_coleta && (
                   <p className="text-xs text-red-500">{errors.data_coleta}</p>
                 )}
               </div>
@@ -407,9 +421,11 @@ const PhysicalChemicalAnalysisModal = ({
                   type="time"
                   value={formData.hora_coleta}
                   onChange={(e) => handleInputChange('hora_coleta', e.target.value)}
-                  className={`h-11 ${errors.hora_coleta ? 'border-red-500' : ''}`}
+                  className={readOnly ? "h-11 bg-gray-50 text-gray-700 cursor-default" : `h-11 ${errors.hora_coleta ? 'border-red-500' : ''}`}
+                  disabled={readOnly}
+                  readOnly={readOnly}
                 />
-                {errors.hora_coleta && (
+                {!readOnly && errors.hora_coleta && (
                   <p className="text-xs text-red-500">{errors.hora_coleta}</p>
                 )}
               </div>
@@ -427,9 +443,11 @@ const PhysicalChemicalAnalysisModal = ({
                   value={formData.temperatura_ambiente ?? ''}
                   onChange={(e) => handleInputChange('temperatura_ambiente', e.target.value === '' ? null : parseFloat(e.target.value))}
                   placeholder="Ex: 25.5"
-                  className={`h-11 ${errors.temperatura_ambiente ? 'border-red-500' : ''}`}
+                  className={readOnly ? "h-11 bg-gray-50 text-gray-700 cursor-default" : `h-11 ${errors.temperatura_ambiente ? 'border-red-500' : ''}`}
+                  disabled={readOnly}
+                  readOnly={readOnly}
                 />
-                {errors.temperatura_ambiente && (
+                {!readOnly && errors.temperatura_ambiente && (
                   <p className="text-xs text-red-500">{errors.temperatura_ambiente}</p>
                 )}
               </div>
@@ -445,9 +463,11 @@ const PhysicalChemicalAnalysisModal = ({
                   value={formData.temperatura_amostra ?? ''}
                   onChange={(e) => handleInputChange('temperatura_amostra', e.target.value === '' ? null : parseFloat(e.target.value))}
                   placeholder="Ex: 23.0"
-                  className={`h-11 ${errors.temperatura_amostra ? 'border-red-500' : ''}`}
+                  className={readOnly ? "h-11 bg-gray-50 text-gray-700 cursor-default" : `h-11 ${errors.temperatura_amostra ? 'border-red-500' : ''}`}
+                  disabled={readOnly}
+                  readOnly={readOnly}
                 />
-                {errors.temperatura_amostra && (
+                {!readOnly && errors.temperatura_amostra && (
                   <p className="text-xs text-red-500">{errors.temperatura_amostra}</p>
                 )}
               </div>
@@ -459,8 +479,9 @@ const PhysicalChemicalAnalysisModal = ({
                 <Select
                   value={formData.tipo_coleta}
                   onValueChange={(value) => handleInputChange('tipo_coleta', value)}
+                  disabled={readOnly}
                 >
-                  <SelectTrigger className={`h-11 ${errors.tipo_coleta ? 'border-red-500' : ''}`}>
+                  <SelectTrigger className={readOnly ? "h-11 bg-gray-50 text-gray-700 cursor-default" : `h-11 ${errors.tipo_coleta ? 'border-red-500' : ''}`}>
                     <SelectValue placeholder="Selecione o tipo" />
                   </SelectTrigger>
                   <SelectContent>
@@ -471,7 +492,7 @@ const PhysicalChemicalAnalysisModal = ({
                     ))}
                   </SelectContent>
                 </Select>
-                {errors.tipo_coleta && (
+                {!readOnly && errors.tipo_coleta && (
                   <p className="text-xs text-red-500">{errors.tipo_coleta}</p>
                 )}
               </div>
@@ -486,9 +507,11 @@ const PhysicalChemicalAnalysisModal = ({
                   value={formData.codigo_amostra}
                   onChange={(e) => handleInputChange('codigo_amostra', e.target.value)}
                   placeholder="Ex: AMT-2024-001"
-                  className={`h-11 ${errors.codigo_amostra ? 'border-red-500' : ''}`}
+                  className={readOnly ? "h-11 bg-gray-50 text-gray-700 cursor-default" : `h-11 ${errors.codigo_amostra ? 'border-red-500' : ''}`}
+                  disabled={readOnly}
+                  readOnly={readOnly}
                 />
-                {errors.codigo_amostra && (
+                {!readOnly && errors.codigo_amostra && (
                   <p className="text-xs text-red-500">{errors.codigo_amostra}</p>
                 )}
               </div>
@@ -567,22 +590,26 @@ const PhysicalChemicalAnalysisModal = ({
               value={formData.observacoes}
               onChange={(e) => handleInputChange('observacoes', e.target.value)}
               placeholder="Observações adicionais sobre a análise..."
-              className="min-h-[100px] resize-none"
+              className={readOnly ? "min-h-[100px] resize-none bg-gray-50 text-gray-700 cursor-default" : "min-h-[100px] resize-none"}
+              disabled={readOnly}
+              readOnly={readOnly}
             />
           </div>
 
-          <DialogFooter className="gap-2">
-            <Button type="button" variant="outline" onClick={handleClose} disabled={isSaving}>
-              Cancelar
-            </Button>
-            <Button
-              type="submit"
-              className="bg-gradient-to-r from-emerald-600 to-teal-700 text-white hover:from-emerald-700 hover:to-teal-800"
-              disabled={isSaving}
-            >
-              {isSaving ? 'Salvando...' : 'Salvar Análise'}
-            </Button>
-          </DialogFooter>
+          {!readOnly && (
+            <DialogFooter className="gap-2">
+              <Button type="button" variant="outline" onClick={handleClose} disabled={isSaving}>
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                className="bg-gradient-to-r from-emerald-600 to-teal-700 text-white hover:from-emerald-700 hover:to-teal-800"
+                disabled={isSaving}
+              >
+                {isSaving ? 'Salvando...' : 'Salvar Análise'}
+              </Button>
+            </DialogFooter>
+          )}
         </form>
       </DialogContent>
     </Dialog>
